@@ -10,6 +10,16 @@ namespace sentinel {
 AppBase::AppBase(AppID id, TaskID task_id)
     : app_id_(id), task_id_(task_id)
 {
+    // NOTE: Do NOT call xQueueCreate or EventBus here!
+    // Global AppBase objects are constructed before main() via init_array,
+    // long before FreeRTOS heap or EventBus are initialised.
+    // Use base_init() after the scheduler infrastructure is ready.
+}
+
+void AppBase::base_init()
+{
+    if (bus_queue_) return;  // already initialised
+
     // Create a private FreeRTOS queue for receiving bus events
     bus_queue_ = xQueueCreate(BUS_QUEUE_DEPTH, sizeof(BusEvent));
     configASSERT(bus_queue_);
@@ -17,7 +27,6 @@ AppBase::AppBase(AppID id, TaskID task_id)
     // Subscribe to all event types (full mask covers bits 0..10)
     constexpr uint32_t ALL_EVENTS = 0x0000'07FFu;
     bus_sub_id_ = EventBus::instance().subscribe(bus_queue_, ALL_EVENTS);
-    // bus_sub_id_ == -1 means the bus subscriber table is full — non-fatal but logged
 }
 
 AppBase::~AppBase()

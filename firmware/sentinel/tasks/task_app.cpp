@@ -72,6 +72,10 @@ void sentinel_push_app(sentinel::AppBase* new_app)
         new_app = &g_home_dashboard_instance;
     }
 
+    // Deferred init: create FreeRTOS queue + EventBus subscription.
+    // Safe to call multiple times (idempotent).
+    new_app->base_init();
+
     g_current_app = new_app;
     g_current_app->on_enter();
 

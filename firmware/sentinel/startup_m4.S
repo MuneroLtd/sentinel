@@ -123,9 +123,22 @@ Reset_Handler:
     movs    r2, #0
 .Lzero_loop:
     cmp     r0, r1
-    bge     .Lcall_init
+    bge     .Lzero_ahbram
     str     r2, [r0], #4
     b       .Lzero_loop
+
+    /* ---- 2b. Zero .ahbram (FreeRTOS heap + task stacks) ---- */
+    /* The .ahbram section is NOLOAD so we must zero it explicitly.   */
+    /* Without this, pvPortMalloc reads garbage heap metadata.         */
+.Lzero_ahbram:
+    ldr     r0, =_ahbram_start
+    ldr     r1, =_ahbram_end
+    movs    r2, #0
+.Lahbram_loop:
+    cmp     r0, r1
+    bge     .Lcall_init
+    str     r2, [r0], #4
+    b       .Lahbram_loop
 
     /* ---- 3. C++ static constructors ---- */
 .Lcall_init:

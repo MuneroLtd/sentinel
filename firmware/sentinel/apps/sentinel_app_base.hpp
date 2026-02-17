@@ -19,6 +19,11 @@ public:
     explicit AppBase(AppID id, TaskID task_id);
     virtual ~AppBase();
 
+    // Deferred init: creates FreeRTOS queue and subscribes to EventBus.
+    // Must be called AFTER the scheduler and EventBus are initialised
+    // (i.e. from sentinel_main, not from a global constructor).
+    void base_init();
+
     // Called by task_app when this app becomes active
     virtual void on_enter() = 0;
     // Called when leaving this app (e.g. switching to another)
