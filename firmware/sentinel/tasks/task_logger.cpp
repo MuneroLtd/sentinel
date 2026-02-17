@@ -40,6 +40,8 @@
 #endif
 
 #include "../tasks/task_ids.hpp"
+#include "../hal/uart.hpp"
+#include "../hal/lpc4320_regs.hpp"
 
 // ---------------------------------------------------------------------------
 // LPC4320 USART0 register definitions
@@ -186,6 +188,148 @@ static void print_stack_watermarks()
 }
 
 // ---------------------------------------------------------------------------
+// Serial debug console — command parser
+// ---------------------------------------------------------------------------
+
+static constexpr size_t CONSOLE_LINE_MAX = 64;
+
+struct ConsoleState {
+    char     line[CONSOLE_LINE_MAX];
+    uint8_t  pos;
+};
+
+static ConsoleState s_console{};
+
+static bool str_eq(const char* a, const char* b) {
+    while (*a && *b) {
+        if (*a++ != *b++) return false;
+    }
+    return *a == *b;
+}
+
+static void console_cmd_status()
+{
+    char buf[512];
+    vTaskList(buf);
+    usart0::write("=== Task Status ===\r\n", 21);
+    usart0::write(buf, strlen(buf));
+
+    char line[80];
+    int n = snprintf(line, sizeof(line),
+        "Free heap: %" PRIu32 " bytes\r\n",
+        static_cast<uint32_t>(xPortGetFreeHeapSize()));
+    if (n > 0) usart0::write(line, static_cast<size_t>(n));
+}
+
+static void console_cmd_sgpio()
+{
+    SGPIO_Type* sgpio = LPC_SGPIO;
+    char line[80];
+
+    usart0::write("=== SGPIO Status ===\r\n", 22);
+
+    // Print enabled state
+    int n = snprintf(line, sizeof(line),
+        "CTRL_ENABLED write-only; checking slice A count\r\n");
+    if (n > 0) usart0::write(line, static_cast<size_t>(n));
+
+    // Print counters for the 8 data slices
+    static constexpr uint8_t slices[] = {0, 8, 4, 9, 2, 10, 5, 11};
+    static constexpr char names[][2] = {"A","I","E","J","C","K","F","L"};
+    for (int i = 0; i < 8; i++) {
+        uint8_t s = slices[i];
+        n = snprintf(line, sizeof(line),
+            "  Slice %s: COUNT=0x%08" PRIX32 " POS=0x%08" PRIX32 " REG_SS=0x%08" PRIX32 "\r\n",
+            names[i],
+            sgpio->COUNT[s],
+            sgpio->POS[s],
+            sgpio->REG_SS[s]);
+        if (n > 0) usart0::write(line, static_cast<size_t>(n));
+    }
+}
+
+static void console_cmd_mem()
+{
+    char line[80];
+    usart0::write("=== Memory Usage ===\r\n", 22);
+
+    int n = snprintf(line, sizeof(line),
+        "FreeRTOS heap free: %" PRIu32 " bytes\r\n",
+        static_cast<uint32_t>(xPortGetFreeHeapSize()));
+    if (n > 0) usart0::write(line, static_cast<size_t>(n));
+
+    n = snprintf(line, sizeof(line),
+        "FreeRTOS heap min ever free: %" PRIu32 " bytes\r\n",
+        static_cast<uint32_t>(xPortGetMinimumEverFreeHeapSize()));
+    if (n > 0) usart0::write(line, static_cast<size_t>(n));
+
+    // SRAM0 usage from linker symbols
+    extern uint32_t _bss_end;
+    extern uint32_t _data_start;
+    uint32_t sram0_used = reinterpret_cast<uint32_t>(&_bss_end) -
+                          reinterpret_cast<uint32_t>(&_data_start);
+    n = snprintf(line, sizeof(line),
+        "SRAM0 .data+.bss: %" PRIu32 " bytes (of 128 KB)\r\n",
+        sram0_used);
+    if (n > 0) usart0::write(line, static_cast<size_t>(n));
+}
+
+static void console_cmd_help()
+{
+    static constexpr const char help_text[] =
+        "=== Sentinel Debug Console ===\r\n"
+        "  status  - Task states, free heap\r\n"
+        "  sgpio   - SGPIO register dump\r\n"
+        "  mem     - Memory usage\r\n"
+        "  help    - This message\r\n";
+    usart0::write(help_text, sizeof(help_text) - 1);
+}
+
+static void console_execute(const char* cmd)
+{
+    if (str_eq(cmd, "status"))     console_cmd_status();
+    else if (str_eq(cmd, "sgpio")) console_cmd_sgpio();
+    else if (str_eq(cmd, "mem"))   console_cmd_mem();
+    else if (str_eq(cmd, "help"))  console_cmd_help();
+    else if (cmd[0] != '\0') {
+        usart0::write("Unknown command: ", 17);
+        usart0::write(cmd, strlen(cmd));
+        usart0::write("\r\nType 'help' for commands.\r\n", 28);
+    }
+    usart0::write("> ", 2);  // prompt
+}
+
+// Poll UART RX and accumulate into line buffer. Returns when no more data.
+static void console_poll()
+{
+    int ch;
+    while ((ch = uart_getc_nb()) >= 0) {
+        const char c = static_cast<char>(ch);
+
+        if (c == '\r' || c == '\n') {
+            // Echo newline
+            usart0::putchar('\r');
+            usart0::putchar('\n');
+            // Null-terminate and execute
+            s_console.line[s_console.pos] = '\0';
+            console_execute(s_console.line);
+            s_console.pos = 0;
+        } else if (c == '\b' || c == 0x7F) {
+            // Backspace
+            if (s_console.pos > 0) {
+                s_console.pos--;
+                usart0::putchar('\b');
+                usart0::putchar(' ');
+                usart0::putchar('\b');
+            }
+        } else if (s_console.pos < CONSOLE_LINE_MAX - 1) {
+            s_console.line[s_console.pos++] = c;
+            usart0::putchar(static_cast<uint8_t>(c));  // echo
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // task_logger_fn
 //
 // Logger task entry point. Priority: LOGGER (4).
@@ -208,10 +352,16 @@ extern "C" void task_logger_fn(void* /*pvParameters*/)
 
     sentinel_log("LOGGER", "Sentinel logger task started");
 
+    // Print initial console prompt
+    usart0::write("\r\n> ", 4);
+
     TickType_t last_hwm_tick = xTaskGetTickCount();
     char drain_buf[64];
 
     for (;;) {
+        // Poll serial console for input
+        console_poll();
+
         // Drain ring buffer to UART in small chunks
         size_t drained = 0;
         do {

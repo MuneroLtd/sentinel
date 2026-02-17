@@ -219,20 +219,64 @@ static constexpr uint8_t UART0_RX_SCU_PIN   = 1;
 static constexpr uint8_t UART0_RX_SCU_FUNC  = 1;
 
 // ===========================================================================
-// Navigation joystick (GPIO inputs, active-low with pull-up)
-// Pin assignments are H4M-specific (differ from H1/H2).
+// Navigation input (H4M)
+// H4M uses a touchscreen + rotary encoder routed through the EPM240 CPLD —
+// NOT direct GPIO pins.  A proper nav driver will be added when the EPM240
+// CPLD data-bus driver is implemented.  The old P0_0–P0_4 assignments were
+// incorrect: those pins are SGPIO data lines on HackRF.
 // ===========================================================================
-// UP:     P0_0  → GPIO0[0]
-// DOWN:   P0_1  → GPIO0[1]
-// LEFT:   P0_2  → GPIO0[2]
-// RIGHT:  P0_3  → GPIO0[3]
-// SELECT: P0_4  → GPIO0[4]
-static constexpr uint8_t NAV_GPIO_PORT      = 0;
-static constexpr uint8_t NAV_UP_PIN         = 0;
-static constexpr uint8_t NAV_DOWN_PIN       = 1;
-static constexpr uint8_t NAV_LEFT_PIN       = 2;
-static constexpr uint8_t NAV_RIGHT_PIN      = 3;
-static constexpr uint8_t NAV_SELECT_PIN     = 4;
+
+// ===========================================================================
+// SGPIO data bus (8-bit parallel from XC2C64A CPLD to LPC4320)
+// Pin → SGPIO function (SCU func number from UM10503 Table 169)
+//
+// Data path: MAX5864 ADC → XC2C64A CPLD → SGPIO parallel bus → GPDMA → memory
+// The CPLD provides an external clock on SGPIO8 and 8 data bits on SGPIO0–7.
+// ===========================================================================
+// SGPIO0: P0_0 → SCU func 3
+static constexpr uint8_t SGPIO0_SCU_GRP   = 0;
+static constexpr uint8_t SGPIO0_SCU_PIN   = 0;
+static constexpr uint8_t SGPIO0_SCU_FUNC  = 3;
+
+// SGPIO1: P0_1 → SCU func 3
+static constexpr uint8_t SGPIO1_SCU_GRP   = 0;
+static constexpr uint8_t SGPIO1_SCU_PIN   = 1;
+static constexpr uint8_t SGPIO1_SCU_FUNC  = 3;
+
+// SGPIO2: P1_15 → SCU func 2
+static constexpr uint8_t SGPIO2_SCU_GRP   = 1;
+static constexpr uint8_t SGPIO2_SCU_PIN   = 15;
+static constexpr uint8_t SGPIO2_SCU_FUNC  = 2;
+
+// SGPIO3: P1_16 → SCU func 2
+static constexpr uint8_t SGPIO3_SCU_GRP   = 1;
+static constexpr uint8_t SGPIO3_SCU_PIN   = 16;
+static constexpr uint8_t SGPIO3_SCU_FUNC  = 2;
+
+// SGPIO4: P1_0 → SCU func 6
+static constexpr uint8_t SGPIO4_SCU_GRP   = 1;
+static constexpr uint8_t SGPIO4_SCU_PIN   = 0;
+static constexpr uint8_t SGPIO4_SCU_FUNC  = 6;
+
+// SGPIO5: P1_17 → SCU func 6
+static constexpr uint8_t SGPIO5_SCU_GRP   = 1;
+static constexpr uint8_t SGPIO5_SCU_PIN   = 17;
+static constexpr uint8_t SGPIO5_SCU_FUNC  = 6;
+
+// SGPIO6: P1_1 → SCU func 3
+static constexpr uint8_t SGPIO6_SCU_GRP   = 1;
+static constexpr uint8_t SGPIO6_SCU_PIN   = 1;
+static constexpr uint8_t SGPIO6_SCU_FUNC  = 3;
+
+// SGPIO7: P1_2 → SCU func 3
+static constexpr uint8_t SGPIO7_SCU_GRP   = 1;
+static constexpr uint8_t SGPIO7_SCU_PIN   = 2;
+static constexpr uint8_t SGPIO7_SCU_FUNC  = 3;
+
+// SGPIO8 (clock from CPLD): dedicated CLK2 pin
+// CLK2 is a special clock input pin, not a regular P-group pin.
+// Its SCU register is at SCU_BASE + 0xC08 (not addressable via scu_sfs).
+static constexpr uint32_t SCU_SFSCLK2_OFFSET = 0xC08u;
 
 // ===========================================================================
 // CPLD JTAG interface (for CPLD programming / bitstream update)

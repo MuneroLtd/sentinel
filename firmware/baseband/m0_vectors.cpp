@@ -12,7 +12,7 @@ extern "C" void m0_main(void);
 
 // ISR handlers (defined in main_m0.cpp)
 extern "C" void SysTick_Handler(void);
-extern "C" void DMA_IRQHandler(void);
+extern "C" void SGPIO_IRQHandler(void);
 
 // Stack top symbol provided by m0.ld
 extern uint32_t _stack_top;
@@ -35,9 +35,9 @@ const uint32_t m0_vector_table[48] = {
     reinterpret_cast<uint32_t>(&Default_Handler),      // [14] PendSV
     reinterpret_cast<uint32_t>(&SysTick_Handler),      // [15] SysTick
     // External IRQs [16-47] — 32 entries
-    reinterpret_cast<uint32_t>(&Default_Handler),      // [16] IRQ0  - RTC
+    reinterpret_cast<uint32_t>(&SGPIO_IRQHandler),     // [16] IRQ0  - SGPIO exchange
     reinterpret_cast<uint32_t>(&Default_Handler),      // [17] IRQ1  - M4CORE
-    reinterpret_cast<uint32_t>(&DMA_IRQHandler),       // [18] IRQ2  - GPDMA
+    reinterpret_cast<uint32_t>(&Default_Handler),      // [18] IRQ2  - GPDMA (unused)
     0u, 0u, 0u, 0u, 0u, 0u, 0u,                       // [19-25] IRQ3-9
     0u, 0u, 0u, 0u, 0u, 0u, 0u,                       // [26-32] IRQ10-16
     0u, 0u, 0u, 0u, 0u, 0u, 0u,                       // [33-39] IRQ17-23

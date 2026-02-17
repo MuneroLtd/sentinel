@@ -87,6 +87,7 @@ add_executable(sentinel_m4
     hal/ssp.cpp
     hal/i2c.cpp
     hal/uart.cpp
+    hal/sgpio.cpp
 
     # BSP
     bsp/lcd_ili9341.cpp

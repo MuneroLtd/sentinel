@@ -21,3 +21,9 @@ void uart_puts(const char* s);
 // Minimal printf. Supports: %d, %u, %x, %X, %s, %c, %%.
 // Returns the number of characters written.
 int uart_printf(const char* fmt, ...);
+
+// Check if receive data is available (LSR RDR bit).
+bool uart_rx_ready();
+
+// Non-blocking read. Returns the received character, or -1 if no data.
+int uart_getc_nb();

@@ -2,7 +2,7 @@
 // Project Sentinel — Application Task (task_app)
 //
 // Owns the display and drives the active application at ~60 Hz.
-// Handles joystick navigation input and M0 audio notification.
+// Handles navigation input (stub until EPM240 CPLD driver) and M0 audio.
 //
 // App switching API:
 //   void sentinel_push_app(AppBase* app)  — switch to a new app
@@ -80,66 +80,17 @@ void sentinel_push_app(sentinel::AppBase* new_app)
 }
 
 // ---------------------------------------------------------------------------
-// Joystick debounce state
+// Navigation input stub
 // ---------------------------------------------------------------------------
+// H4M uses a touchscreen + rotary encoder routed through the EPM240 CPLD,
+// NOT direct GPIO pins.  The old P0_0–P0_4 assignments were incorrect
+// (those pins are SGPIO data lines).  This stub returns NONE until the
+// EPM240 CPLD data-bus driver is implemented.
 namespace {
 
-struct NavState {
-    bool     pressed;
-    bool     reported;
-    uint32_t press_tick;  // tick at which the pin went active-low
-};
-
-static NavState s_nav[5]{};  // UP, DOWN, LEFT, RIGHT, SELECT
-
-static constexpr uint32_t DEBOUNCE_MS = 10u;
-
-// Read all 5 nav pins and return a debounced NavKey event (or NONE).
-// Called once per 60 Hz tick.
 static sentinel::ui::NavKey poll_joystick()
 {
-    using sentinel::ui::NavKey;
-
-    // Pin mapping: index 0-4 → UP, DOWN, LEFT, RIGHT, SELECT
-    static constexpr struct {
-        uint8_t port;
-        uint8_t pin;
-        NavKey  key;
-    } k_pins[5] = {
-        { NAV_GPIO_PORT, NAV_UP_PIN,     NavKey::UP     },
-        { NAV_GPIO_PORT, NAV_DOWN_PIN,   NavKey::DOWN   },
-        { NAV_GPIO_PORT, NAV_LEFT_PIN,   NavKey::LEFT   },
-        { NAV_GPIO_PORT, NAV_RIGHT_PIN,  NavKey::RIGHT  },
-        { NAV_GPIO_PORT, NAV_SELECT_PIN, NavKey::SELECT },
-    };
-
-    const uint32_t now = xTaskGetTickCount();
-    NavKey result = NavKey::NONE;
-
-    for (int i = 0; i < 5; ++i) {
-        // Pins are active-low: gpio_read returns false when key is pressed.
-        const bool active = !gpio_read(k_pins[i].port, k_pins[i].pin);
-
-        if (active && !s_nav[i].pressed) {
-            // Rising edge: start debounce timer
-            s_nav[i].pressed    = true;
-            s_nav[i].reported   = false;
-            s_nav[i].press_tick = now;
-        } else if (!active && s_nav[i].pressed) {
-            // Released: clear state
-            s_nav[i].pressed  = false;
-            s_nav[i].reported = false;
-        }
-
-        // Report the key once per press, after debounce interval
-        if (s_nav[i].pressed && !s_nav[i].reported &&
-            (now - s_nav[i].press_tick) >= DEBOUNCE_MS) {
-            s_nav[i].reported = true;
-            result = k_pins[i].key;  // Last active key wins (one per tick)
-        }
-    }
-
-    return result;
+    return sentinel::ui::NavKey::NONE;
 }
 
 // ---------------------------------------------------------------------------

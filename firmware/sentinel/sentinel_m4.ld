@@ -4,7 +4,8 @@
 /* Memory map (LPC4320 UM10503):                                               */
 /*   Flash (SPI NOR via SPIFI, memory-mapped): 0x00000000 – 0x000FFFFF  1 MB  */
 /*   M4 SRAM0 (local bus):                     0x10000000 – 0x1001FFFF 128 KB */
-/*   AHB SRAM (shared AHB bus):                0x20000000 – 0x20007FFF  32 KB */
+/*   AHB SRAM (M0 DMA buffers):                0x20000000 – 0x20003FFF  16 KB */
+/*   AHB SRAM (M4 heap/statics):               0x20004000 – 0x20007FFF  16 KB */
 /*   M0 SRAM (reserved):                       0x10080000 – 0x10087FFF   8 KB */
 /*   Shared SRAM (IPC, reserved):              0x10088000 – 0x10089FFF   8 KB */
 /*                                                                             */
@@ -26,8 +27,10 @@ MEMORY
     /* Cortex-M4 local SRAM0: stack + data + BSS + FreeRTOS heap */
     SRAM0  (rwx) : ORIGIN = 0x10000000, LENGTH = 128K
 
-    /* AHB SRAM bank: use for DMA buffers and large static arrays */
-    AHBRAM (rwx) : ORIGIN = 0x20000000, LENGTH = 32K
+    /* AHB SRAM bank (upper 16 KB): use for FreeRTOS heap and large static arrays.
+     * Lower 16 KB (0x20000000–0x20003FFF) is reserved for M0 DMA ping-pong
+     * buffers (ETB_SRAM in m0.ld). */
+    AHBRAM (rwx) : ORIGIN = 0x20004000, LENGTH = 16K
 
     /* M0 SRAM — reserved; M4 startup copies baseband binary here */
     /* Not listed as allocatable; the startup routine writes it raw. */

@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Project Sentinel — Cortex-M0 Baseband DSP Firmware
-// main_m0.cpp — M0 entry point, DMA ping-pong setup, and main dispatch loop
+// main_m0.cpp — M0 entry point, SGPIO capture, and main dispatch loop
 //
 // Target: LPC4320 Cortex-M0 sub-core at 204 MHz (no FPU, no DWT)
 // Entry point: m0_main() — called from reset vector after minimal CRT init.
+//
+// Data path: SGPIO parallel bus (8-bit from CPLD) → exchange interrupt →
+//            M0 ISR reads shadow registers → ping-pong buffers → DSP
+//
+// NOTE: GPDMA does NOT support peripheral-to-memory for SGPIO on LPC43xx.
+// Data movement is handled by M0 via SGPIO exchange interrupts.
 
 #include "m0_startup.hpp"
 #include "ipc/ipc_protocol.hpp"
@@ -20,11 +26,28 @@
 volatile uint32_t g_systick_ms  = 0u;
 volatile int32_t  g_dma_buf_ready = -1;   // -1 = none; 0 or 1 = buffer index
 
-// DMA ping-pong buffers: two × 4096 bytes of raw int8_t IQ data.
+// Ping-pong buffers: two × 4096 bytes of raw int8_t IQ data.
 // Placed in ETB_SRAM (0x20000000) via the .dma_buffers linker section so
-// they don't eat into the limited 8 KB M0_SRAM.  GPDMA can access ETB SRAM.
+// they don't eat into the limited 8 KB M0_SRAM.
 alignas(4) __attribute__((section(".dma_buffers")))
 int8_t g_dma_buf[2][DMA_BUF_BYTES];
+
+// ---------------------------------------------------------------------------
+// SGPIO capture state
+// ---------------------------------------------------------------------------
+
+// Current write position within the active buffer
+static volatile uint32_t s_buf_write_pos = 0;
+// Which buffer is currently being filled (0 or 1)
+static volatile uint32_t s_buf_active = 0;
+
+// Pointers to SGPIO registers (cached for ISR speed)
+static volatile uint32_t* const s_sgpio_reg_ss =
+    reinterpret_cast<volatile uint32_t*>(SGPIO_BASE + SGPIO_REG_SS_OFFSET);
+static volatile uint32_t* const s_sgpio_clr_status0 =
+    reinterpret_cast<volatile uint32_t*>(SGPIO_BASE + SGPIO_CLR_STATUS0_OFFSET);
+static volatile uint32_t* const s_sgpio_status0 =
+    reinterpret_cast<volatile uint32_t*>(SGPIO_BASE + SGPIO_STATUS0_OFFSET);
 
 // ---------------------------------------------------------------------------
 // SysTick ISR — 1 ms timebase
@@ -35,107 +58,65 @@ extern "C" void SysTick_Handler(void) {
 }
 
 // ---------------------------------------------------------------------------
-// GPDMA ISR — fires on terminal count (buffer full) for channel 0 or 1
+// SGPIO exchange interrupt handler
 // ---------------------------------------------------------------------------
-// The two DMA channels run in a self-reloading linked-list ping-pong scheme:
-// channel 0's LLI points to channel 1's descriptor, and vice-versa.
-// When a channel fires TC, we record which buffer is ready and wake the main loop.
+// Fires every time the SGPIO shadow registers swap (every 32 bits = 4 bytes
+// per slice). With 8 slices in parallel mode, each exchange gives us one
+// 32-bit word from each slice. In 8-bit parallel mode, each word contains
+// 4 samples (bytes). We read slice A's shadow register which contains the
+// interleaved 8-bit data packed by the SGPIO concatenation logic.
+//
+// Each exchange provides 4 bytes (one 32-bit word from the concatenated
+// 8-bit parallel input). We accumulate these into the ping-pong buffers.
 
-// LLI descriptor (must be word-aligned in SRAM; DMA engine reads it directly)
-struct DmaLli {
-    uint32_t srcaddr;
-    uint32_t dstaddr;
-    uint32_t lli;      // pointer to next descriptor, or 0 for end
-    uint32_t control;
-};
+extern "C" void SGPIO_IRQHandler(void) {
+    // Clear exchange interrupt for slice A
+    *s_sgpio_clr_status0 = (1u << SGPIO_SLICE_A);
 
-alignas(4) static DmaLli s_dma_lli[2];  // LLI for ping and pong channels
+    // Read the 32-bit shadow register from slice A.
+    // In 8-bit parallel + concatenated mode, slice A's REG_SS contains
+    // the packed result of all 8 input bits shifted together.
+    const uint32_t data = s_sgpio_reg_ss[SGPIO_SLICE_A];
 
-extern "C" void DMA_IRQHandler(void) {
-    uint32_t tc = GPDMA().INTTCSTAT;
-    GPDMA().INTTCCLEAR = tc;  // acknowledge TC interrupts
+    // Write 4 bytes into the active buffer
+    const uint32_t pos = s_buf_write_pos;
+    int8_t* dst = &g_dma_buf[s_buf_active][pos];
 
-    if (tc & (1u << 0u)) {
-        // Channel 0 (ping buffer) completed
-        g_dma_buf_ready = 0;
-    } else if (tc & (1u << 1u)) {
-        // Channel 1 (pong buffer) completed
-        g_dma_buf_ready = 1;
+    // Store as 32-bit word (4 IQ bytes)
+    *reinterpret_cast<uint32_t*>(dst) = data;
+
+    const uint32_t new_pos = pos + 4u;
+
+    if (new_pos >= DMA_BUF_BYTES) {
+        // Buffer is full — signal it to main loop and swap
+        g_dma_buf_ready = static_cast<int32_t>(s_buf_active);
+        s_buf_active ^= 1u;
+        s_buf_write_pos = 0;
+        sev();  // Wake main loop
+    } else {
+        s_buf_write_pos = new_pos;
     }
-
-    // Clear any error flags
-    GPDMA().INTERRCLR = GPDMA().INTERRSTAT;
-
-    // Wake main loop via SEV (M0 WFE will return)
-    sev();
 }
 
 // ---------------------------------------------------------------------------
-// DMA initialisation — SSP0 RX → ping-pong SRAM buffers
+// SGPIO capture initialisation
 // ---------------------------------------------------------------------------
-// SSP0 is already configured by M4 as SPI slave (IQ capture from MAX5864).
-// M0 owns the DMA channels and services the TC interrupt.
+// M4 has already configured SGPIO slices and pins. M0 just enables the
+// SGPIO exchange interrupt so it can read data as it arrives.
 
-static void dma_init(void) {
-    // Enable GPDMA controller
-    GPDMA().CONFIG = 1u;  // enable bit
+static void sgpio_capture_init(void) {
+    // Reset buffer state
+    s_buf_write_pos = 0;
+    s_buf_active = 0;
+    g_dma_buf_ready = -1;
 
-    // Build LLI for ping channel (ch0) → when done, ch1 starts (pong)
-    // and for pong channel (ch1) → when done, ch0 starts (ping)
-    //
-    // CONTROL word:
-    //   TransferSize = DMA_BUF_BYTES (4096)
-    //   SBSize = 4 (source burst = 4 bytes)
-    //   DBSize = 4 (dest burst = 4 bytes)
-    //   Swidth = byte (8-bit)
-    //   Dwidth = byte (8-bit)
-    //   DI = 1 (destination increment)
-    //   I = 1 (TC interrupt enable)
+    // Clear any pending SGPIO exchange interrupt status
+    *s_sgpio_clr_status0 = 0xFFFFu;
 
-    const uint32_t ctrl_word =
-        (DMA_BUF_BYTES << DMA_CTRL_TRANSFERSIZE_SHIFT) |
-        (1u << 12) |  // SBSize = 4 (001)
-        (1u << 15) |  // DBSize = 4 (001)
-        DMA_CTRL_SWIDTH_BYTE |
-        DMA_CTRL_DWIDTH_BYTE |
-        DMA_CTRL_DINC |
-        DMA_CTRL_I;
-
-    // SSP0 RX FIFO address
-    const uint32_t ssp0_dr = SSP0_BASE + 0x008u;
-
-    // Ping (buf 0): source = SSP0 DR, dest = g_dma_buf[0], next = pong LLI
-    s_dma_lli[0].srcaddr = ssp0_dr;
-    s_dma_lli[0].dstaddr = reinterpret_cast<uint32_t>(&g_dma_buf[0][0]);
-    s_dma_lli[0].lli     = reinterpret_cast<uint32_t>(&s_dma_lli[1]);
-    s_dma_lli[0].control = ctrl_word;
-
-    // Pong (buf 1): source = SSP0 DR, dest = g_dma_buf[1], next = ping LLI
-    s_dma_lli[1].srcaddr = ssp0_dr;
-    s_dma_lli[1].dstaddr = reinterpret_cast<uint32_t>(&g_dma_buf[1][0]);
-    s_dma_lli[1].lli     = reinterpret_cast<uint32_t>(&s_dma_lli[0]);
-    s_dma_lli[1].control = ctrl_word;
-
-    // Program channel 0 (ping) and start it
-    GPDMA().CH[0].SRCADDR  = ssp0_dr;
-    GPDMA().CH[0].DESTADDR = reinterpret_cast<uint32_t>(&g_dma_buf[0][0]);
-    GPDMA().CH[0].LLI      = reinterpret_cast<uint32_t>(&s_dma_lli[1]);
-    GPDMA().CH[0].CONTROL  = ctrl_word;
-    GPDMA().CH[0].CONFIG   =
-        DMA_CFG_E |
-        (DMA_PERIPH_SSP0_RX << DMA_CFG_SRCPERIPHERAL_SHIFT) |
-        DMA_CFG_FLOWCTRL_P2M_DMA |
-        DMA_CFG_IE | DMA_CFG_ITC;
-
-    // Channel 1 (pong) is chained from LLI — starts automatically when ch0 fires
-
-    // Enable SSP0 RX DMA
-    SSP0().DMACR |= SSP_DMACR_RXDMAE;
-
-    // Enable GPDMA interrupt in M0 NVIC (priority 0 = highest)
-    nvic_clear_pending(IRQ_GPDMA);
-    nvic_set_priority(IRQ_GPDMA, 0u);
-    nvic_enable_irq(IRQ_GPDMA);
+    // Enable SGPIO interrupt in M0 NVIC (priority 0 = highest)
+    nvic_clear_pending(IRQ_SGPIO);
+    nvic_set_priority(IRQ_SGPIO, 0u);
+    nvic_enable_irq(IRQ_SGPIO);
 }
 
 // ---------------------------------------------------------------------------
@@ -154,8 +135,6 @@ static void handle_command(void) {
     switch (cmd) {
         case Command::SET_MODE: {
             // Update operating mode and reinitialise DSP pipeline.
-            // BasebandMode is stored in cmd_mode (the IPC struct has no separate
-            // `mode` field — M0 always reads cmd_mode for the current mode).
             BasebandMode new_mode = shared().cmd_mode;
             switch (new_mode) {
                 case BasebandMode::FM:
@@ -178,20 +157,13 @@ static void handle_command(void) {
         }
 
         case Command::TUNE:
-            // Frequency change only — pipeline continues, DSP state is kept
-            // Radio tuning is handled by M4's RF control; M0 just tracks the
-            // centre frequency for spectrum metadata.
             shared().spectrum_center_hz = shared().cmd_freq_hz;
             break;
 
         case Command::SET_GAIN:
-            // Gain changes are applied by M4 directly via RF registers.
-            // M0 acknowledges but takes no DSP action.
             break;
 
         case Command::SHUTDOWN:
-            // Halt all pipelines; M0 will WFE until next SET_MODE
-            // (handled by BasebandMode::IDLE in the main loop default case)
             break;
 
         default:
@@ -204,8 +176,10 @@ static void handle_command(void) {
 // ---------------------------------------------------------------------------
 // Called from reset vector.  M4 has already:
 //   1. Configured clocks (M0 inherits M4's 204 MHz PLL)
-//   2. Set CREG_M0APPMEMMAP = M0_SRAM_BASE
-//   3. Released M0 from reset
+//   2. Configured SGPIO slices and pins
+//   3. Started SGPIO capture (slices enabled)
+//   4. Set CREG_M0APPMEMMAP = M0_SRAM_BASE
+//   5. Released M0 from reset
 // M0 must NOT touch CCU/CGU/RGU — those are M4's domain.
 
 extern "C" void m0_main(void) {
@@ -215,8 +189,8 @@ extern "C" void m0_main(void) {
     // --- 2. Initialise RSSI (always active) -----------------------------------
     rssi_init();
 
-    // --- 3. Set up DMA ping-pong for SSP0 IQ capture -------------------------
-    dma_init();
+    // --- 3. Set up SGPIO exchange interrupt for IQ capture --------------------
+    sgpio_capture_init();
 
     // --- 4. Global interrupt enable -------------------------------------------
     irq_enable();
@@ -231,7 +205,7 @@ extern "C" void m0_main(void) {
 
     // --- 6. Main dispatch loop ------------------------------------------------
     while (true) {
-        // Wait for any event: DMA TC, SysTick, or M4 command via CREG_M0TXEVENT
+        // Wait for any event: SGPIO exchange, SysTick, or M4 command
         wfe();
 
         // --- Check M4 command flags -------------------------------------------
@@ -239,7 +213,7 @@ extern "C" void m0_main(void) {
             handle_command();
         }
 
-        // --- Consume ready DMA buffer -------------------------------------------
+        // --- Consume ready buffer ---------------------------------------------
         int32_t buf_idx;
         {
             irq_disable();
@@ -249,7 +223,7 @@ extern "C" void m0_main(void) {
         }
 
         if (buf_idx < 0) {
-            // No new DMA data — check RSSI tick and loop
+            // No new data — check RSSI tick and loop
             rssi_tick();
             continue;
         }
@@ -283,7 +257,6 @@ extern "C" void m0_main(void) {
 
             case BasebandMode::IDLE:
             default:
-                // Nothing to do; power is saved by WFE
                 break;
         }
     }

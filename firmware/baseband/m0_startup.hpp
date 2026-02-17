@@ -39,6 +39,26 @@ static constexpr uint32_t GPDMA_CH0_BASE = GPDMA_BASE + 0x100u;
 static constexpr uint32_t GPDMA_CH1_BASE = GPDMA_BASE + 0x120u;
 
 // ---------------------------------------------------------------------------
+// SGPIO peripheral base (for IQ capture — replaces SSP0 as data source)
+// ---------------------------------------------------------------------------
+static constexpr uint32_t SGPIO_BASE     = 0x40101000u;
+
+// SGPIO register offsets used by M0
+static constexpr uint32_t SGPIO_REG_SS_OFFSET    = 0x100u;  // Shadow registers
+static constexpr uint32_t SGPIO_STATUS0_OFFSET   = 0x270u;  // Exchange interrupt status
+static constexpr uint32_t SGPIO_CLR_STATUS0_OFFSET = 0x280u; // Exchange interrupt clear
+
+// Slice indices for the 8-bit parallel data (same as M4 sgpio.cpp)
+static constexpr uint8_t SGPIO_SLICE_A = 0;
+static constexpr uint8_t SGPIO_SLICE_I = 8;
+static constexpr uint8_t SGPIO_SLICE_E = 4;
+static constexpr uint8_t SGPIO_SLICE_J = 9;
+static constexpr uint8_t SGPIO_SLICE_C = 2;
+static constexpr uint8_t SGPIO_SLICE_K = 10;
+static constexpr uint8_t SGPIO_SLICE_F = 5;
+static constexpr uint8_t SGPIO_SLICE_L = 11;
+
+// ---------------------------------------------------------------------------
 // Cortex-M0 SysTick registers
 // ---------------------------------------------------------------------------
 
@@ -86,6 +106,7 @@ static inline NVICRegs& NVIC() {
 // LPC4320 M0 IRQ numbers (subset used by baseband firmware)
 // LPC4320 UM10503 Table 65 — M0 sub-core interrupt table
 static constexpr uint32_t IRQ_GPDMA  = 2u;   // GPDMA combined interrupt → DMA TC/Error
+static constexpr uint32_t IRQ_SGPIO  = 0u;   // SGPIO exchange interrupt
 static constexpr uint32_t IRQ_SSP0   = 12u;  // SSP0 (not used — DMA mode)
 static constexpr uint32_t IRQ_TIMER3 = 20u;  // TIMER3 (spare timer for scanner dwell)
 
@@ -182,11 +203,11 @@ static inline void systick_delay_ms(uint32_t ms) {
 }
 
 // ---------------------------------------------------------------------------
-// GPDMA — ping-pong DMA for SSP0 IQ sample capture
+// Ping-pong buffers for SGPIO IQ sample capture
 // ---------------------------------------------------------------------------
-// Two DMA channels (0=ping, 1=pong) in linked-list mode.
-// Each fills one half-buffer of 2048 int8_t pairs = 4096 bytes.
-// When a channel fires its TC interrupt, the ISR flips g_dma_buf_ready.
+// SGPIO exchange interrupt fires every 32 bits (4 bytes).
+// The M0 ISR reads SGPIO shadow registers and packs data into ping-pong
+// buffers. When a buffer is full, g_dma_buf_ready signals the main loop.
 
 static constexpr uint32_t DMA_BUF_SAMPLES = 2048u;   // IQ pairs per buffer
 static constexpr uint32_t DMA_BUF_BYTES   = DMA_BUF_SAMPLES * 2u; // 4096 bytes

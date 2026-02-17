@@ -126,6 +126,13 @@ void clocks_init() {
     // I2C1 (CCU2 APB1)
     *CCU2_CLK_APB1_I2C1_CFG = CCU_CLK_RUN | CCU_CLK_AUTO;
 
+    // -------- Step 7: SGPIO peripheral clock (for baseband IQ capture) --------
+    // BASE_PERIPH_CLK drives SGPIO — source from PLL1 (204 MHz)
+    *CGU_BASE_PERIPH_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
+
+    // SGPIO branch clock (CCU1)
+    *CCU1_CLK_PERIPH_SGPIO_CFG = CCU_CLK_RUN | CCU_CLK_AUTO;
+
     // Short settling wait
     busy_wait(500);
 }

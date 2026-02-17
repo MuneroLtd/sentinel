@@ -423,6 +423,89 @@ struct I2S_Type {
 static constexpr uint32_t I2S0_BASE = 0x400A2000u;
 static inline I2S_Type* LPC_I2S0 = reinterpret_cast<I2S_Type*>(I2S0_BASE);
 
+// ---------------------------------------------------------------------------
+// SGPIO — Serial GPIO  (UM10503 §21)
+// Base: 0x40101000
+// ---------------------------------------------------------------------------
+struct SGPIO_Type {
+    volatile uint32_t OUT_MUX_CFG[16];     // 0x000  Output mux config per slice
+    volatile uint32_t SGPIO_MUX_CFG[16];   // 0x040  SGPIO mux config per slice
+    volatile uint32_t SLICE_MUX_CFG[16];   // 0x080  Slice mux config
+    volatile uint32_t REG[16];             // 0x0C0  Data registers
+    volatile uint32_t REG_SS[16];          // 0x100  Shadow registers (swap buffer)
+    volatile uint32_t PRESET[16];          // 0x140  Count presets
+    volatile uint32_t COUNT[16];           // 0x180  Counters
+    volatile uint32_t POS[16];             // 0x1C0  Position registers (shift count + pos)
+    volatile uint32_t MASK_A;              // 0x200  GPIO mask A
+    volatile uint32_t MASK_H;              // 0x204  GPIO mask H
+    volatile uint32_t MASK_I;              // 0x208  GPIO mask I
+    volatile uint32_t MASK_P;              // 0x20C  GPIO mask P
+    volatile uint32_t GPIO_INREG;          // 0x210  GPIO input register
+    volatile uint32_t GPIO_OUTREG;         // 0x214  GPIO output register
+    volatile uint32_t GPIO_OENREG;         // 0x218  GPIO output enable register
+    volatile uint32_t CTRL_ENABLED;        // 0x21C  Slice enable
+    volatile uint32_t CTRL_DISABLED;       // 0x220  Slice disable
+    uint32_t          _reserved[7];        // 0x224–0x23C
+    volatile uint32_t CLR_EN[3];           // 0x240  Interrupt clear enable (exchange, pattern, input)
+    uint32_t          _reserved2;          // 0x24C
+    volatile uint32_t SET_EN[3];           // 0x250  Interrupt set enable
+    uint32_t          _reserved3;          // 0x25C
+    volatile uint32_t ENABLE[3];           // 0x260  Interrupt enable readback
+    uint32_t          _reserved4;          // 0x26C
+    volatile uint32_t STATUS[3];           // 0x270  Interrupt status
+    uint32_t          _reserved5;          // 0x27C
+    volatile uint32_t CLR_STATUS[3];       // 0x280  Interrupt status clear
+    uint32_t          _reserved6;          // 0x28C
+    volatile uint32_t SET_STATUS[3];       // 0x290  Interrupt status set
+};
+
+static constexpr uint32_t SGPIO_BASE = 0x40101000u;
+static inline SGPIO_Type* LPC_SGPIO  = reinterpret_cast<SGPIO_Type*>(SGPIO_BASE);
+
+// CCU1 SGPIO branch clock register (UM10503 Table 74)
+static inline volatile uint32_t* CCU1_CLK_PERIPH_SGPIO_CFG = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x610u);
+
+// SGPIO slice indices (A-P map to 0-15, but in hardware order: AHBP...)
+// Slice letter → index mapping per UM10503 Table 192
+static constexpr uint8_t SGPIO_SLICE_A = 0;
+static constexpr uint8_t SGPIO_SLICE_B = 1;
+static constexpr uint8_t SGPIO_SLICE_C = 2;
+static constexpr uint8_t SGPIO_SLICE_D = 3;
+static constexpr uint8_t SGPIO_SLICE_E = 4;
+static constexpr uint8_t SGPIO_SLICE_F = 5;
+static constexpr uint8_t SGPIO_SLICE_G = 6;
+static constexpr uint8_t SGPIO_SLICE_H = 7;
+static constexpr uint8_t SGPIO_SLICE_I = 8;
+static constexpr uint8_t SGPIO_SLICE_J = 9;
+static constexpr uint8_t SGPIO_SLICE_K = 10;
+static constexpr uint8_t SGPIO_SLICE_L = 11;
+static constexpr uint8_t SGPIO_SLICE_M = 12;
+static constexpr uint8_t SGPIO_SLICE_N = 13;
+static constexpr uint8_t SGPIO_SLICE_O = 14;
+static constexpr uint8_t SGPIO_SLICE_P = 15;
+
+// SGPIO_MUX_CFG fields
+static constexpr uint32_t SGPIO_MUX_CFG_EXT_CLK_ENABLE = (1u << 0);  // Use external clock
+// CLK_SOURCE_PIN_MODE [3:1]: select which SGPIO pin provides clock
+// CLK_SOURCE_SLICE_MODE [5:4]: select clock from another slice
+// QUALIFIER_MODE [8:6]: qualifier for counting
+// QUALIFIER_PIN_ID [11:9]: qualifier pin
+// QUALIFIER_SLICE_MODE [13:12]: qualifier from slice
+// CONCAT_ENABLE [14]: concatenate with adjacent slice
+// CONCAT_ORDER [15]: concatenation order
+
+// SLICE_MUX_CFG fields
+static constexpr uint32_t SGPIO_SLICE_MUX_MATCH_MODE     = (1u << 0);  // Match mode
+// CLK_CAPTURE_MODE [1]: capture on clock edge
+// CLKGEN_MODE [2]: 0=internal, 1=external
+// INV_OUT_CLK [3]: invert output clock
+// DATA_CAPTURE_MODE [4]: 0=detect rising, 1=detect level
+// PARALLEL_MODE [7:6]: 00=1-bit, 01=2-bit, 10=4-bit, 11=8-bit (byte)
+// INV_QUALIFIER [8]: invert qualifier
+
+// POS register fields
+// POS[n]: bits [7:0] = POS (current shift position), bits [15:8] = POS_RESET (shift count - 1)
+
 // I2S DAO / DAI bit fields
 static constexpr uint32_t I2S_DAO_WORDWIDTH_8    = (0u << 0);
 static constexpr uint32_t I2S_DAO_WORDWIDTH_16   = (1u << 0);
