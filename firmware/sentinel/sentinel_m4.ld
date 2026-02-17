@@ -198,10 +198,13 @@ SECTIONS
     }
 }
 
-/* Expose symbols used by startup code */
+/* Expose symbols used by startup code and _sbrk */
 PROVIDE(_etext = LOADADDR(.data) + SIZEOF(.data));
 PROVIDE(_end   = _bss_end);
 PROVIDE(end    = _bss_end);
+
+/* Newlib _sbrk heap limit: leave 2 KB guard for the MSP/ISR stack */
+PROVIDE(_heap_limit = _stack_top - 0x800);
 
 /* Sanity: ensure stack does not overlap BSS */
 ASSERT(_stack_bottom >= _bss_end,

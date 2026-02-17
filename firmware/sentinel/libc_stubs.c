@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <errno.h>
 
 void* memset(void* s, int c, size_t n) {
     unsigned char* p = (unsigned char*)s;
@@ -49,11 +50,62 @@ uint32_t get_fattime(void) {
          | ((uint32_t)1 << 16);
 }
 
-// C++ ABI requires __dso_handle for static destructors (which we never run)
+// -------------------------------------------------------------------------
+// C++ ABI stubs — bare-metal firmware never exits, so destructor
+// registration is a no-op.  We provide BOTH __cxa_atexit (Itanium ABI)
+// and __aeabi_atexit (ARM EABI) so the linker never pulls newlib's
+// versions (which internally call _malloc_r and crash without _sbrk).
+// -------------------------------------------------------------------------
 void* __dso_handle = 0;
 
-// __cxa_atexit — register static destructor (no-op in bare metal)
 int __cxa_atexit(void (*destructor)(void*), void* arg, void* dso) {
     (void)destructor; (void)arg; (void)dso;
     return 0;
+}
+
+// ARM EABI variant — compiler-generated init_array wrappers call this.
+// Argument order differs from __cxa_atexit: (obj, dtor, dso) vs (dtor, obj, dso).
+int __aeabi_atexit(void* obj, void (*dtor)(void*), void* dso) {
+    (void)obj; (void)dtor; (void)dso;
+    return 0;
+}
+
+// -------------------------------------------------------------------------
+// _sbrk — newlib heap allocator back-end
+//
+// newlib-nano's snprintf, sscanf, and other stdio functions call _malloc_r
+// internally (e.g. to initialise the _REENT structure on first use).
+// Without a working _sbrk, malloc returns NULL and newlib dereferences it
+// → HardFault.
+//
+// The heap grows upward from _end (end of BSS) toward _heap_limit
+// (defined in the linker script as _stack_top - 2KB guard).
+// -------------------------------------------------------------------------
+extern char _end;          /* linker symbol: end of BSS */
+extern char _heap_limit;   /* linker symbol: max heap address */
+
+static char* heap_ptr = 0;
+
+void* _sbrk(int incr) {
+    if (heap_ptr == 0) {
+        heap_ptr = &_end;
+    }
+
+    char* prev = heap_ptr;
+    char* new_ptr = heap_ptr + incr;
+
+    if (new_ptr >= &_heap_limit) {
+        errno = ENOMEM;
+        return (void*)-1;
+    }
+
+    heap_ptr = new_ptr;
+    return prev;
+}
+
+// _sbrk_r — reentrant wrapper that newlib calls instead of _sbrk directly
+struct _reent;
+void* _sbrk_r(struct _reent* r, int incr) {
+    (void)r;
+    return _sbrk(incr);
 }
