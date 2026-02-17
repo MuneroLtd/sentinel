@@ -45,8 +45,9 @@ namespace sentinel {
 
 namespace sentinel {
 
-// The active application. Set by sentinel_push_app().
-static AppBase* g_current_app = nullptr;
+// g_current_app is defined in app_home_dashboard.cpp and declared extern
+// in app_home_dashboard.hpp. We use that single definition for the
+// navigation stack (single-depth).
 
 // Static home dashboard instance — lives for the entire firmware lifetime.
 // Placement in BSS ensures zero-initialisation before main().

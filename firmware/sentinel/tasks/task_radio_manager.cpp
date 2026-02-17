@@ -35,6 +35,7 @@
 #include "../event_bus/event_bus.hpp"
 #include "../event_bus/event_types.hpp"
 #include "../tasks/task_ids.hpp"
+#include "../radio/radio_ctrl.hpp"
 
 // Forward declaration of sentinel_log (implemented in task_logger.cpp)
 extern "C" void sentinel_log(const char* tag, const char* fmt, ...);
@@ -114,16 +115,31 @@ static bool pending_dequeue(PendingRequest* out)
 }
 
 // ---------------------------------------------------------------------------
-// grant_radio: notify a task that it has been granted radio access.
+// grant_radio: configure RF hardware and notify the task that it has access.
 // ---------------------------------------------------------------------------
-static void grant_radio(TaskHandle_t handle, sentinel::TaskID id)
+static void grant_radio(TaskHandle_t handle, sentinel::TaskID id,
+                        const sentinel::RadioRequestPayload& req)
 {
     s_current_owner  = id;
     s_owner_handle   = handle;
     s_owner_priority = (handle != nullptr) ? uxTaskPriorityGet(handle) : 0;
 
+    // Configure the physical radio chain for the requester's parameters
+    if (req.freq_hz != 0) {
+        sentinel::radio::tune(req.freq_hz);
+    }
+    if (req.bandwidth_hz != 0) {
+        sentinel::radio::set_bandwidth(req.bandwidth_hz);
+    }
+    if (req.mode == 0) {
+        sentinel::radio::rx_mode();
+    }
+
     xTaskNotify(handle, sentinel::notify::RADIO_GRANTED, eSetBits);
-    sentinel_log("RADIO_MGR", "GRANTED to task %d", static_cast<int>(id));
+    sentinel_log("RADIO_MGR", "GRANTED to task %d freq=%u bw=%u",
+                 static_cast<int>(id),
+                 static_cast<unsigned>(req.freq_hz),
+                 static_cast<unsigned>(req.bandwidth_hz));
 }
 
 // ---------------------------------------------------------------------------
@@ -134,8 +150,11 @@ static void grant_next_pending()
     PendingRequest next{};
     if (pending_dequeue(&next) && next.valid) {
         grant_radio(next.handle,
-                    static_cast<sentinel::TaskID>(next.payload.requesting_task));
+                    static_cast<sentinel::TaskID>(next.payload.requesting_task),
+                    next.payload);
     } else {
+        // No pending requests — put RF hardware into low-power standby
+        sentinel::radio::standby();
         s_current_owner  = sentinel::TaskID::NONE;
         s_owner_handle   = nullptr;
         s_owner_priority = 0;
@@ -159,7 +178,7 @@ static void handle_radio_request(const sentinel::BusEvent& ev)
 
     // Case 1: radio is free — grant immediately
     if (s_current_owner == sentinel::TaskID::NONE) {
-        grant_radio(req_handle, req_id);
+        grant_radio(req_handle, req_id, p);
         return;
     }
 
@@ -191,7 +210,7 @@ static void handle_radio_request(const sentinel::BusEvent& ev)
             xTaskNotify(s_owner_handle, sentinel::notify::RADIO_PREEMPTED, eSetBits);
         }
 
-        grant_radio(req_handle, req_id);
+        grant_radio(req_handle, req_id, p);
     } else {
         // Lower or equal priority — queue the request
         if (!pending_enqueue(req_handle, p)) {
@@ -237,6 +256,13 @@ static void handle_radio_release(const sentinel::BusEvent& ev)
 extern "C" void task_radio_manager_fn(void* /*pvParameters*/)
 {
     sentinel_log("RADIO_MGR", "Radio manager task started");
+
+    // Initialise the RF hardware chain (Si5351C, RFFC5072, MAX2837, MAX5864, CPLD)
+    if (!sentinel::radio::init()) {
+        sentinel_log("RADIO_MGR", "ERROR: radio::init() failed — task halting");
+        vTaskSuspend(nullptr);
+    }
+    sentinel_log("RADIO_MGR", "Radio hardware initialised");
 
     // Create a local event receive queue.
     // Depth 16: radio events arrive infrequently; this is ample headroom.

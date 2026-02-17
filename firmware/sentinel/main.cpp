@@ -29,19 +29,19 @@
 #include "task.h"
 
 // Shared IPC
-#include "../shared/ipc/ipc_protocol.hpp"
+#include "ipc/ipc_protocol.hpp"
 
 #include <cstring>
 #include <cstdint>
 
 // ---------------------------------------------------------------------------
-// M0 binary symbols — provided by the linker via objcopy --add-section.
-// The M0 firmware binary is linked as a raw section named ".m0_fw".
-// The linker script (sentinel_m4.ld) exports these symbols.
+// M0 binary symbols — provided by the linker script (sentinel_m4.ld).
+// The baseband binary is linked into the .m0_binary section in Flash.
+// The linker script exports _m0_binary_start and _m0_binary_end.
 // ---------------------------------------------------------------------------
 extern "C" {
-    extern const uint8_t _binary_baseband_bin_start[];
-    extern const uint8_t _binary_baseband_bin_end[];
+    extern const uint8_t _m0_binary_start[];
+    extern const uint8_t _m0_binary_end[];
 }
 
 // ---------------------------------------------------------------------------
@@ -96,8 +96,8 @@ extern "C" void sentinel_main() {
     //    We copy it to the start of M0's view of SRAM1.
     // -------------------------------------------------------------------------
     {
-        const uint8_t* src   = _binary_baseband_bin_start;
-        const uint8_t* end   = _binary_baseband_bin_end;
+        const uint8_t* src   = _m0_binary_start;
+        const uint8_t* end   = _m0_binary_end;
         const size_t   fw_sz = static_cast<size_t>(end - src);
 
         uart_printf("[SENTINEL] Copying M0 firmware: %u bytes to 0x%X\r\n",

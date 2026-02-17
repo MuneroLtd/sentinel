@@ -132,6 +132,7 @@ target_compile_options(CMSISDSP PRIVATE ${CPU_FLAGS} -O2 -ffunction-sections -fd
 # ---------------------------------------------------------------------------
 
 add_executable(baseband
+    m0_vectors.cpp
     main_m0.cpp
     dsp/fm_demod.cpp
     dsp/spectrum.cpp

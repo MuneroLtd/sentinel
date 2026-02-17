@@ -8,15 +8,15 @@
 // Project Sentinel - Event Bus Interface
 // Typed publish-subscribe over FreeRTOS queues.
 // Thread-safe. ISR-safe publish variant provided.
-// Max 8 subscribers. Bus queue depth 64 messages.
-// Total SRAM cost: ~2.1KB.
+// Max 12 subscribers. Bus queue depth 64 messages.
+// Total SRAM cost: ~2.5KB.
 // ============================================================
 
 namespace sentinel {
 
 class EventBus {
 public:
-    static constexpr int     MAX_SUBSCRIBERS  = 8;
+    static constexpr int     MAX_SUBSCRIBERS  = 12;
     static constexpr int     BUS_QUEUE_DEPTH  = 64;
     static constexpr TickType_t PUBLISH_TIMEOUT = pdMS_TO_TICKS(5);
 
