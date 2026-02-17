@@ -225,7 +225,11 @@ void lcd_init() {
     io_write(true, io_reg);
     delay_ms(120);
 
-    // ----- 5. ILI9341 init command sequence (from Mayhem lcd_init_pp) -----
+    // ----- 5. Software reset (some panels need this in addition to HW reset) -----
+    lcd_command(0x01);  // SWRESET
+    delay_ms(120);
+
+    // ----- 6. ILI9341 init command sequence (from Mayhem lcd_init_pp) -----
 
     // Power Control B
     { uint8_t d[] = {0x00, 0xD9, 0x30};
@@ -279,10 +283,9 @@ void lcd_init() {
     { uint8_t d[] = {0x9B};
       lcd_cmd_data(0xC7, d, sizeof(d)); }
 
-    // Memory Access Control: MV=1, MX=1, ML=1, BGR=1 → 0x78 (landscape 320×240)
-    // MV swaps row/col so CASET addresses 0-319, PASET 0-239.
-    // MY/MX may need flipping if image is mirrored — adjust on hardware.
-    { uint8_t d[] = {0x78};
+    // Memory Access Control: MY=1, MX=1, MV=0, ML=1, BGR=1 → 0xD8
+    // Matches Mayhem PortaPack exactly (portrait 240×320).
+    { uint8_t d[] = {0xD8};
       lcd_cmd_data(0x36, d, sizeof(d)); }
 
     // Pixel Format: 16bpp

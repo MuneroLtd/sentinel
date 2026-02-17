@@ -244,14 +244,34 @@ extern "C" void sentinel_main() {
     uart_puts("[SENTINEL] Initialising LCD (UART will stop after this)...\r\n");
     lcd_init();
 
-    boot_animation();
+    // --- Diagnostic: blink LED1 rapidly 5 times to confirm lcd_init completed ---
+    for (int i = 0; i < 5; i++) {
+        gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
+        for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
+        gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
+        for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
+    }
+
+    // --- Diagnostic: fill screen with RED to test pixel writes ---
+    lcd_fill_rect(0, 0, LCD_WIDTH, LCD_HEIGHT, LCD_RED);
+
+    // Blink LED1 5 more times to confirm fill completed
+    for (int i = 0; i < 5; i++) {
+        gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
+        for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
+        gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
+        for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
+    }
+
+    // Skip boot_animation for now — diagnostic mode
+    // boot_animation();
 
     // -------------------------------------------------------------------------
     // 3. SGPIO pin mux — 8 data pins + 1 clock pin for baseband IQ capture
     //    Must be done before sgpio_init() and before M0 release.
     //    All SGPIO pins: input buffer enabled, no pull, high-speed slew.
     // -------------------------------------------------------------------------
-    uart_puts("[SENTINEL] Configuring SGPIO pins...\r\n");
+    // NOTE: All uart_puts/printf removed after lcd_init — UART pins are now LCD bus.
 
     static constexpr uint32_t SGPIO_PIN_MODE = SCU_MODE_INACT | SCU_MODE_IBUF | SCU_MODE_ZIF_DIS;
 
@@ -276,14 +296,12 @@ extern "C" void sentinel_main() {
     // -------------------------------------------------------------------------
     // 4. SGPIO peripheral init — configure slices for 8-bit parallel capture
     // -------------------------------------------------------------------------
-    uart_puts("[SENTINEL] Initialising SGPIO...\r\n");
     sgpio_init();
 
     // -------------------------------------------------------------------------
     // 5. Zero the shared IPC memory region
     //    This guarantees both cores see a clean state before the M0 starts.
     // -------------------------------------------------------------------------
-    uart_puts("[SENTINEL] Clearing IPC shared memory...\r\n");
     ::memset(reinterpret_cast<void*>(sentinel::ipc::SHARED_RAM_BASE),
              0,
              sentinel::ipc::SHARED_RAM_SIZE);
@@ -298,16 +316,11 @@ extern "C" void sentinel_main() {
         const uint8_t* end   = _m0_binary_end;
         const size_t   fw_sz = static_cast<size_t>(end - src);
 
-        uart_printf("[SENTINEL] Copying M0 firmware: %u bytes to 0x%X\r\n",
-                    static_cast<uint32_t>(fw_sz),
-                    static_cast<uint32_t>(M0_SRAM_BASE));
-
         // Guard against oversized firmware (SRAM1 = 72 KB, shared IPC uses top 8 KB)
         // Safe load region: 0x10080000 – 0x10088000 = 32 KB below shared region
         static constexpr size_t M0_SRAM_LIMIT = 0x8000u; // 32 KB
         if (fw_sz > M0_SRAM_LIMIT) {
-            uart_puts("[SENTINEL] ERROR: M0 firmware too large!\r\n");
-            while (true) { } // Halt
+            while (true) { } // Halt — M0 firmware too large
         }
 
         ::memcpy(reinterpret_cast<void*>(M0_SRAM_BASE), src, fw_sz);
@@ -322,7 +335,6 @@ extern "C" void sentinel_main() {
     // 7. Start SGPIO capture before M0 release — ensures data is flowing
     //    when the M0 enables its exchange interrupt.
     // -------------------------------------------------------------------------
-    uart_puts("[SENTINEL] Starting SGPIO capture...\r\n");
     sgpio_start();
 
     // -------------------------------------------------------------------------
@@ -332,8 +344,6 @@ extern "C" void sentinel_main() {
     //      b) Assert M0APP reset via RGU (so changes take effect)
     //      c) Deassert M0APP reset to start the core
     // -------------------------------------------------------------------------
-    uart_puts("[SENTINEL] Releasing M0 core...\r\n");
-
     // Set M0APP memory map to our SRAM load address
     *CREG_M0APPMEMMAP = M0_SRAM_BASE;
 
@@ -345,25 +355,19 @@ extern "C" void sentinel_main() {
     // Deassert M0APP reset (write 0 to the reset bit)
     *RGU_RESET_CTRL1 = 0u;
 
-    uart_puts("[SENTINEL] M0 core started.\r\n");
-
     // -------------------------------------------------------------------------
     // 9. Initialise the event bus (creates FreeRTOS mutex — must be before
     //    vTaskStartScheduler but can be done without the scheduler running
     //    since xSemaphoreCreateMutex works before the scheduler starts).
     // -------------------------------------------------------------------------
     if (!sentinel::EventBus::instance().init()) {
-        uart_puts("[SENTINEL] FATAL: EventBus init failed!\r\n");
-        while (true) { }
+        while (true) { } // FATAL: EventBus init failed
     }
-
-    uart_puts("[SENTINEL] EventBus ready.\r\n");
 
     // -------------------------------------------------------------------------
     // 10. Create all application tasks (static allocation, no heap needed)
     // -------------------------------------------------------------------------
     sentinel_create_tasks();
-    uart_puts("[SENTINEL] Tasks created. Starting scheduler...\r\n");
 
     // Turn off LED2 ("boot in progress"), turn on LED3 ("boot complete")
     gpio_write(LED2_GPIO_PORT, LED2_GPIO_PIN, false);
@@ -378,7 +382,7 @@ extern "C" void sentinel_main() {
     // -------------------------------------------------------------------------
     // Should never reach here.
     // -------------------------------------------------------------------------
-    uart_puts("[SENTINEL] FATAL: Scheduler returned!\r\n");
+    // FATAL: Scheduler returned
     while (true) {
         __asm volatile("wfe");
     }

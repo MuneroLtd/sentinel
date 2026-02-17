@@ -4,7 +4,7 @@
 // Interface: 8-bit parallel 8080-I bus via EPM240 CPLD.
 // The CPLD converts two 8-bit MCU bus cycles into one 16-bit LCD bus cycle.
 // Colour depth: 16 bits per pixel (RGB565).
-// Resolution: 320 × 240 landscape (MADCTL with MV bit for row/col swap).
+// Resolution: 240 × 320 portrait (MADCTL 0xD8, matching Mayhem PortaPack).
 //
 // Control signals: WRX, RDX, ADDR (D/CX), DIR, IO_STBX on GPIO1/5.
 // Data bus: GPIO3[8:15] (P7_0..P7_7).
@@ -40,8 +40,8 @@ static constexpr uint16_t LCD_MAGENTA = 0xF81Fu;
 // ---------------------------------------------------------------------------
 // LCD dimensions
 // ---------------------------------------------------------------------------
-static constexpr uint16_t LCD_WIDTH   = 320;
-static constexpr uint16_t LCD_HEIGHT  = 240;
+static constexpr uint16_t LCD_WIDTH   = 240;
+static constexpr uint16_t LCD_HEIGHT  = 320;
 
 // ---------------------------------------------------------------------------
 // Driver API
