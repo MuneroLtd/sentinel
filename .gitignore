@@ -1,0 +1,34 @@
+# Build artifacts
+build/
+Build/
+*.bin
+*.elf
+*.map
+*.uf2
+
+# ESP-IDF build
+esp32-bridge/build/
+esp32-bridge/sdkconfig
+esp32-bridge/dependencies.lock
+esp32-bridge/managed_components/
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*.orig
+
+# macOS
+.DS_Store
+
+# Logs and captures (generated at runtime)
+sdcard/SENTINEL/logs/*.log
+sdcard/SENTINEL/knowledge_base/*.bin
+sdcard/SENTINEL/knowledge_base/*.idx
+sdcard/SENTINEL/captures/*.iq
+
+# Keep directory placeholders
+!sdcard/SENTINEL/logs/.gitkeep
+!sdcard/SENTINEL/knowledge_base/.gitkeep
+!sdcard/SENTINEL/captures/.gitkeep

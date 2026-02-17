@@ -1,0 +1,18 @@
+{
+  "_comment": "Event type to MQTT topic mapping. {device_id} is substituted at runtime.",
+  "base_topic": "sentinel/{device_id}",
+  "topics": {
+    "signal_detected":   "sentinel/{device_id}/signal_detected",
+    "gps":               "sentinel/{device_id}/gps",
+    "sensors":           "sentinel/{device_id}/sensors",
+    "status":            "sentinel/{device_id}/status",
+    "aircraft_position": "sentinel/{device_id}/adsb"
+  },
+  "qos": {
+    "signal_detected": 0,
+    "gps": 0,
+    "sensors": 0,
+    "status": 1,
+    "aircraft_position": 0
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "_comment": "Sentinel device configuration. Edit this file on the SD card.",
+  "device_id": "sentinel_001",
+  "mqtt": {
+    "broker_host": "192.168.1.100",
+    "broker_port": 1883,
+    "enabled": true
+  },
+  "wifi": {
+    "ssid": "",
+    "password": "",
+    "_note": "Leave blank to disable Wi-Fi. Fill in before first use."
+  },
+  "iq_stream": {
+    "enabled": false,
+    "target_ip": "192.168.1.100",
+    "target_port": 5555,
+    "decimation": 8,
+    "_note": "decimation: 1=20Msps, 2=10Msps, 4=5Msps, 8=2.5Msps"
+  }
+}

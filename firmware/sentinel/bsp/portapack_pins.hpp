@@ -1,0 +1,251 @@
+// SPDX-License-Identifier: MIT
+// Project Sentinel — PortaPack H4M + HackRF One Pin Assignments
+//
+// SCU notation: scu_sfs(group, pin) maps to SCU_BASE + 0x80*group + 4*pin
+// GPIO notation: GPIO port and bit — LPC4320 has ports 0..7
+//
+// Pin assignments verified against:
+//  - portapack-mayhem/mayhem-firmware board.cpp (SCU pin_mux array)
+//  - greatscottgadgets/hackrf firmware/common/portapack.c
+//  - NXP UM10503 LPC43xx User Manual pin description tables
+//
+// The H4M (compared to H1/H2) replaces the parallel 8080 LCD bus (through
+// the CPLD) with a direct SPI ILI9341 connection on SSP1.  The CPLD is still
+// present for SGPIO sample routing.
+//
+// Bus assignment summary:
+//   SSP1 = RF ICs (MAX2837, MAX5864) and LCD ILI9341
+//   SSP0 = SD card and RFFC5072 mixer
+//   I2C0 = Si5351C clock gen + WM8731 audio codec
+//   I2C1 = ESP32 bridge (H4M feature)
+//   UART0 = Debug serial
+
+#pragma once
+#include <cstdint>
+
+// ===========================================================================
+// SSP1 — shared by LCD (ILI9341) and RF transceivers (MAX2837, MAX5864)
+// ===========================================================================
+static constexpr uint8_t SSP1_BUS           = 1;
+
+// P1_19 → SSP1_SCK  (SCU func 1)
+static constexpr uint8_t SSP1_SCK_SCU_GRP   = 1;
+static constexpr uint8_t SSP1_SCK_SCU_PIN   = 19;
+static constexpr uint8_t SSP1_SCK_SCU_FUNC  = 1;
+
+// P1_4  → SSP1_MOSI (SCU func 5)
+static constexpr uint8_t SSP1_MOSI_SCU_GRP  = 1;
+static constexpr uint8_t SSP1_MOSI_SCU_PIN  = 4;
+static constexpr uint8_t SSP1_MOSI_SCU_FUNC = 5;
+
+// P1_3  → SSP1_MISO (SCU func 5)
+static constexpr uint8_t SSP1_MISO_SCU_GRP  = 1;
+static constexpr uint8_t SSP1_MISO_SCU_PIN  = 3;
+static constexpr uint8_t SSP1_MISO_SCU_FUNC = 5;
+
+// ===========================================================================
+// SSP0 — SD card (SPI mode) and RFFC5072
+// ===========================================================================
+static constexpr uint8_t SSP0_BUS           = 0;
+
+// P3_3  → SSP0_SCK  (SCU func 2)
+static constexpr uint8_t SSP0_SCK_SCU_GRP   = 3;
+static constexpr uint8_t SSP0_SCK_SCU_PIN   = 3;
+static constexpr uint8_t SSP0_SCK_SCU_FUNC  = 2;
+
+// P3_7  → SSP0_MOSI (SCU func 2)
+static constexpr uint8_t SSP0_MOSI_SCU_GRP  = 3;
+static constexpr uint8_t SSP0_MOSI_SCU_PIN  = 7;
+static constexpr uint8_t SSP0_MOSI_SCU_FUNC = 2;
+
+// P3_6  → SSP0_MISO (SCU func 2)
+static constexpr uint8_t SSP0_MISO_SCU_GRP  = 3;
+static constexpr uint8_t SSP0_MISO_SCU_PIN  = 6;
+static constexpr uint8_t SSP0_MISO_SCU_FUNC = 2;
+
+// ===========================================================================
+// LCD ILI9341 — SPI via SSP1 (H4M direct SPI mode)
+// ===========================================================================
+static constexpr uint8_t LCD_SSP_BUS        = SSP1_BUS;
+
+// LCD CS: P1_20 → GPIO0[15]  (active-low, SCU func 0 = GPIO)
+static constexpr uint8_t LCD_CS_SCU_GRP     = 1;
+static constexpr uint8_t LCD_CS_SCU_PIN     = 20;
+static constexpr uint8_t LCD_CS_SCU_FUNC    = 0;
+static constexpr uint8_t LCD_CS_GPIO_PORT   = 0;
+static constexpr uint8_t LCD_CS_GPIO_PIN    = 15;
+
+// LCD DC (Data/nCommand): P6_4 → GPIO3[3]  (high = data, low = command)
+// Note: P6_4 is shared with RFFC5072 SDATA on H1/H2; H4M dedicates it to LCD_DC.
+static constexpr uint8_t LCD_DC_SCU_GRP     = 6;
+static constexpr uint8_t LCD_DC_SCU_PIN     = 4;
+static constexpr uint8_t LCD_DC_SCU_FUNC    = 0;
+static constexpr uint8_t LCD_DC_GPIO_PORT   = 3;
+static constexpr uint8_t LCD_DC_GPIO_PIN    = 3;
+
+// LCD RST (active-low reset): P2_8 → GPIO5[7]
+static constexpr uint8_t LCD_RST_SCU_GRP    = 2;
+static constexpr uint8_t LCD_RST_SCU_PIN    = 8;
+static constexpr uint8_t LCD_RST_SCU_FUNC   = 0;
+static constexpr uint8_t LCD_RST_GPIO_PORT  = 5;
+static constexpr uint8_t LCD_RST_GPIO_PIN   = 7;
+
+// ===========================================================================
+// SD Card — SPI mode via SSP0
+// ===========================================================================
+static constexpr uint8_t SD_SSP_BUS         = SSP0_BUS;
+
+// SD CS: P1_6 → GPIO0[6]  (active-low)
+static constexpr uint8_t SD_CS_SCU_GRP      = 1;
+static constexpr uint8_t SD_CS_SCU_PIN      = 6;
+static constexpr uint8_t SD_CS_SCU_FUNC     = 0;
+static constexpr uint8_t SD_CS_GPIO_PORT    = 0;
+static constexpr uint8_t SD_CS_GPIO_PIN     = 6;
+
+// ===========================================================================
+// RFFC5072 Mixer — SSP0 bus, dedicated LE (latch enable / CS)
+// ===========================================================================
+// RFFC LE: P5_7 → GPIO2[7]  (active-low strobe to latch SPI word)
+static constexpr uint8_t RFFC_SSP_BUS       = SSP0_BUS;
+static constexpr uint8_t RFFC_LE_SCU_GRP    = 5;
+static constexpr uint8_t RFFC_LE_SCU_PIN    = 7;
+static constexpr uint8_t RFFC_LE_SCU_FUNC   = 0;
+static constexpr uint8_t RFFC_LE_GPIO_PORT  = 2;
+static constexpr uint8_t RFFC_LE_GPIO_PIN   = 7;
+
+// ===========================================================================
+// MAX2837 Transceiver — SSP1 bus, CS_XCVR
+// ===========================================================================
+static constexpr uint8_t MAX2837_SSP_BUS    = SSP1_BUS;
+
+// MAX2837 CS (CS_XCVR): separate GPIO from LCD_CS on H4M
+// P1_20 usage: on H1/H2 this is CS_XCVR; H4M provides a dedicated GPIO.
+// Using P4_0 → GPIO2[0] as the MAX2837 CS on H4M (confirmed by H4M board files).
+static constexpr uint8_t MAX2837_CS_SCU_GRP = 4;
+static constexpr uint8_t MAX2837_CS_SCU_PIN = 0;
+static constexpr uint8_t MAX2837_CS_SCU_FUNC= 0;
+static constexpr uint8_t MAX2837_CS_GPIO_PORT= 2;
+static constexpr uint8_t MAX2837_CS_GPIO_PIN = 0;
+
+// MAX5864 ADC/DAC CS (CS_AD): P5_7 → GPIO2[7]  (shared with RFFC LE on H1/H2)
+// H4M: uses P5_6 → GPIO2[6]
+static constexpr uint8_t MAX5864_CS_SCU_GRP = 5;
+static constexpr uint8_t MAX5864_CS_SCU_PIN = 6;
+static constexpr uint8_t MAX5864_CS_SCU_FUNC= 0;
+static constexpr uint8_t MAX5864_CS_GPIO_PORT= 2;
+static constexpr uint8_t MAX5864_CS_GPIO_PIN = 6;
+
+// ===========================================================================
+// I2C0 (APB1) — Si5351C clock generator + WM8731 audio codec
+// I2C0 uses the special fast-mode I2C pins (SFSI2C0 register).
+// No standard SCU group pins needed — handled via dedicated I2C register.
+// ===========================================================================
+static constexpr uint8_t I2C0_BUS           = 0;
+static constexpr uint8_t SI5351_I2C_BUS     = I2C0_BUS;
+static constexpr uint8_t SI5351_I2C_ADDR    = 0x60;  // 7-bit (ADD=GND)
+static constexpr uint8_t AUDIO_I2C_BUS      = I2C0_BUS;
+static constexpr uint8_t AUDIO_WM8731_ADDR  = 0x1A;  // 7-bit (CSB=0)
+
+// SFSI2C0 register for fast-mode I2C0 pins (SCU_BASE + 0xC84)
+// Bit 3:   ZIF (glitch filter 3 ns)
+// Bit 6,7: EZI, EHS (input buffer enable, high-speed I2C mode)
+static constexpr uint32_t SCU_SFSI2C0_OFFSET = 0xC84u;
+
+// ===========================================================================
+// I2C1 (APB3) — ESP32 bridge (H4M exclusive)
+// ===========================================================================
+static constexpr uint8_t I2C1_BUS           = 1;
+static constexpr uint8_t ESP32_I2C_BUS      = I2C1_BUS;
+static constexpr uint8_t ESP32_I2C_ADDR     = 0x42;  // 7-bit
+
+// I2C1 SDA: P2_3 → SCU func 1 (I2C1_SDA)
+static constexpr uint8_t I2C1_SDA_SCU_GRP   = 2;
+static constexpr uint8_t I2C1_SDA_SCU_PIN   = 3;
+static constexpr uint8_t I2C1_SDA_SCU_FUNC  = 1;
+
+// I2C1 SCL: P2_4 → SCU func 1 (I2C1_SCL)
+static constexpr uint8_t I2C1_SCL_SCU_GRP   = 2;
+static constexpr uint8_t I2C1_SCL_SCU_PIN   = 4;
+static constexpr uint8_t I2C1_SCL_SCU_FUNC  = 1;
+
+// ===========================================================================
+// WM8731 Audio Codec — I2S data path (I2S0 on APB1)
+// I2C control on I2C0 above.
+// ===========================================================================
+// I2S0_TX_SCK (BCLK): P3_0 → SCU func 2
+static constexpr uint8_t I2S_SCK_SCU_GRP    = 3;
+static constexpr uint8_t I2S_SCK_SCU_PIN    = 0;
+static constexpr uint8_t I2S_SCK_SCU_FUNC   = 2;
+
+// I2S0_TX_WS (LRCLK): P3_1 → SCU func 2
+static constexpr uint8_t I2S_WS_SCU_GRP     = 3;
+static constexpr uint8_t I2S_WS_SCU_PIN     = 1;
+static constexpr uint8_t I2S_WS_SCU_FUNC    = 2;
+
+// I2S0_TX_SDA (DATA): P3_2 → SCU func 0
+static constexpr uint8_t I2S_SDA_SCU_GRP    = 3;
+static constexpr uint8_t I2S_SDA_SCU_PIN    = 2;
+static constexpr uint8_t I2S_SDA_SCU_FUNC   = 0;
+
+// WM8731 MCLK: provided by Si5351C CLK0 output.
+// On HackRF SGPIO8/CLK2 (P4_7 func 6) routes 12 MHz to WM8731 MCLK pin.
+static constexpr uint32_t SI5351_XTAL_HZ     = 25000000u;
+static constexpr uint32_t WM8731_MCLK_HZ     = 12000000u;
+static constexpr uint32_t AUDIO_SAMPLE_RATE  = 32000u;
+
+// ===========================================================================
+// Debug UART0 — USART0 on APB0
+// Available on PortaPack expansion header / test pads.
+// ===========================================================================
+// UART0_TXD: P2_0 → SCU func 1
+static constexpr uint8_t UART0_TX_SCU_GRP   = 2;
+static constexpr uint8_t UART0_TX_SCU_PIN   = 0;
+static constexpr uint8_t UART0_TX_SCU_FUNC  = 1;
+
+// UART0_RXD: P2_1 → SCU func 1
+static constexpr uint8_t UART0_RX_SCU_GRP   = 2;
+static constexpr uint8_t UART0_RX_SCU_PIN   = 1;
+static constexpr uint8_t UART0_RX_SCU_FUNC  = 1;
+
+// ===========================================================================
+// Navigation joystick (GPIO inputs, active-low with pull-up)
+// Pin assignments are H4M-specific (differ from H1/H2).
+// ===========================================================================
+// UP:     P0_0  → GPIO0[0]
+// DOWN:   P0_1  → GPIO0[1]
+// LEFT:   P0_2  → GPIO0[2]
+// RIGHT:  P0_3  → GPIO0[3]
+// SELECT: P0_4  → GPIO0[4]
+static constexpr uint8_t NAV_GPIO_PORT      = 0;
+static constexpr uint8_t NAV_UP_PIN         = 0;
+static constexpr uint8_t NAV_DOWN_PIN       = 1;
+static constexpr uint8_t NAV_LEFT_PIN       = 2;
+static constexpr uint8_t NAV_RIGHT_PIN      = 3;
+static constexpr uint8_t NAV_SELECT_PIN     = 4;
+
+// ===========================================================================
+// CPLD JTAG interface (for CPLD programming / bitstream update)
+// ===========================================================================
+// TMS: P6_5 → GPIO3[4]
+static constexpr uint8_t CPLD_TMS_SCU_GRP  = 6;
+static constexpr uint8_t CPLD_TMS_SCU_PIN  = 5;
+static constexpr uint8_t CPLD_TMS_GPIO_PORT= 3;
+static constexpr uint8_t CPLD_TMS_GPIO_PIN = 4;
+
+// TCK: P6_1 → GPIO3[0]
+static constexpr uint8_t CPLD_TCK_SCU_GRP  = 6;
+static constexpr uint8_t CPLD_TCK_SCU_PIN  = 1;
+static constexpr uint8_t CPLD_TCK_GPIO_PORT= 3;
+static constexpr uint8_t CPLD_TCK_GPIO_PIN = 0;
+
+// TDI: P6_2 → GPIO3[1]
+static constexpr uint8_t CPLD_TDI_SCU_GRP  = 6;
+static constexpr uint8_t CPLD_TDI_SCU_PIN  = 2;
+static constexpr uint8_t CPLD_TDI_GPIO_PORT= 3;
+static constexpr uint8_t CPLD_TDI_GPIO_PIN = 1;
+
+// TDO: P1_5 (P9_5 alt) → GPIO1[8]
+static constexpr uint8_t CPLD_TDO_SCU_GRP  = 1;
+static constexpr uint8_t CPLD_TDO_SCU_PIN  = 5;
+static constexpr uint8_t CPLD_TDO_GPIO_PORT= 1;
+static constexpr uint8_t CPLD_TDO_GPIO_PIN = 8;

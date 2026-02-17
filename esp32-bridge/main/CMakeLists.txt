@@ -1,0 +1,27 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "shared_state.c"
+        "tasks/task_i2c_slave.c"
+        "tasks/task_gps.c"
+        "tasks/task_bme280.c"
+        "tasks/task_mqtt.c"
+        "tasks/task_iq_stream.c"
+        "tasks/task_webserver.c"
+    INCLUDE_DIRS
+        "."
+        "protocols"
+        "tasks"
+    REQUIRES
+        nvs_flash
+        esp_wifi
+        esp_event
+        esp_netif
+        mqtt
+        esp_http_server
+        driver
+        spi_flash
+        freertos
+        log
+        lwip
+)

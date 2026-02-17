@@ -1,0 +1,33 @@
+{
+  "_comment": "Background RF scanner configuration. Frequencies in Hz.",
+  "ranges": [
+    {
+      "start_hz": 430000000,
+      "end_hz":   440000000,
+      "step_hz":   25000,
+      "_note": "430-440 MHz ISM band (Europe)"
+    },
+    {
+      "start_hz": 863000000,
+      "end_hz":   870000000,
+      "step_hz":   25000,
+      "_note": "863-870 MHz SRD band (Europe)"
+    },
+    {
+      "start_hz": 315000000,
+      "end_hz":   315100000,
+      "step_hz":   25000,
+      "_note": "315 MHz common remote (US)"
+    },
+    {
+      "start_hz": 433890000,
+      "end_hz":   433940000,
+      "step_hz":   5000,
+      "_note": "433.92 MHz fine scan"
+    }
+  ],
+  "dwell_ms": 50,
+  "threshold_dbm": -80,
+  "enabled": true,
+  "_note": "threshold_dbm: signal energy must exceed this to trigger SIGNAL_DETECTED"
+}
