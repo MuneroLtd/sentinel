@@ -346,11 +346,11 @@ static constexpr uint32_t SCU_SFSCLK2_OFFSET = 0xC08u;
 // ===========================================================================
 // CPLD JTAG interface (for CPLD programming / bitstream update)
 // ===========================================================================
-// TMS: P6_5 → GPIO3[4]
-static constexpr uint8_t CPLD_TMS_SCU_GRP  = 6;
-static constexpr uint8_t CPLD_TMS_SCU_PIN  = 5;
-static constexpr uint8_t CPLD_TMS_GPIO_PORT= 3;
-static constexpr uint8_t CPLD_TMS_GPIO_PIN = 4;
+// TMS: P1_8 → GPIO1[1] (PortaPack CPLD, NOT HackRF CPLD)
+static constexpr uint8_t CPLD_TMS_SCU_GRP  = 1;
+static constexpr uint8_t CPLD_TMS_SCU_PIN  = 8;
+static constexpr uint8_t CPLD_TMS_GPIO_PORT= 1;
+static constexpr uint8_t CPLD_TMS_GPIO_PIN = 1;
 
 // TCK: P6_1 → GPIO3[0]
 static constexpr uint8_t CPLD_TCK_SCU_GRP  = 6;

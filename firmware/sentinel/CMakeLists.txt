@@ -92,6 +92,8 @@ add_executable(sentinel_m4
     # BSP
     bsp/lcd_ili9341.cpp
     bsp/audio_wm8731.cpp
+    bsp/cpld_init.cpp
+    bsp/cpld_data_h4m.cpp
 
     # Radio front-end drivers
     radio/si5351.cpp

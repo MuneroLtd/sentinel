@@ -26,6 +26,7 @@
 #include "hal/lpc4320_regs.hpp"
 #include "bsp/portapack_pins.hpp"
 #include "bsp/lcd_ili9341.hpp"
+#include "bsp/cpld_init.hpp"
 #include "ui/font.hpp"
 #include "ui/color.hpp"
 #include "event_bus/event_bus.hpp"
@@ -240,7 +241,36 @@ extern "C" void sentinel_main() {
     //     LCD ID read, UART register dump, clear LED staging.
     //     WARNING: UART output ceases after pin reassignment.
     // -------------------------------------------------------------------------
-    uart_puts("[SENTINEL] v0.2.5 LCD Diagnostic\r\n");
+    // -------------------------------------------------------------------------
+    // 2a. CPLD programming — must happen before LCD init.
+    //     The PortaPack CPLD contains LCD bus routing logic that is loaded
+    //     via JTAG.  Without the correct bitstream, WRX writes don't reach
+    //     the LCD even though CPLD IO register writes (backlight) work.
+    // -------------------------------------------------------------------------
+    uart_puts("[SENTINEL] v0.2.6 — CPLD + LCD Diagnostic\r\n");
+    {
+        CpldStatus cpld_st = portapack_cpld_init();
+        uart_printf("[SENTINEL] CPLD status: %d\r\n", static_cast<int>(cpld_st));
+        if (cpld_st == CpldStatus::Success) {
+            // LED1 × 3 fast = CPLD OK
+            for (int i = 0; i < 3; i++) {
+                gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
+                for (volatile uint32_t d = 0; d < 2000000; d++) __asm volatile("nop");
+                gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
+                for (volatile uint32_t d = 0; d < 2000000; d++) __asm volatile("nop");
+            }
+        } else {
+            // LED3 blink pattern = error code (1=IDCODE, 2=SiliconID, 3=Program)
+            int code = static_cast<int>(cpld_st);
+            for (int i = 0; i < code; i++) {
+                gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, true);
+                for (volatile uint32_t d = 0; d < 5000000; d++) __asm volatile("nop");
+                gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, false);
+                for (volatile uint32_t d = 0; d < 5000000; d++) __asm volatile("nop");
+            }
+        }
+    }
+
 
     // Dump GPIO register state BEFORE pin reassignment
     uart_puts("[SENTINEL] Pre-LCD GPIO state:\r\n");
