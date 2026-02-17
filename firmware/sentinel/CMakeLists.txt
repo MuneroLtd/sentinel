@@ -139,6 +139,14 @@ add_executable(sentinel_m4
     cxx_stubs.cpp
 )
 
+# libc_stubs.c provides memset/memcpy/memmove/memcmp implementations.
+# GCC -O2 recognises byte-loop patterns and replaces them with calls to the
+# very functions being defined → infinite recursion → stack overflow.
+# -fno-builtin prevents GCC from treating these as compiler builtins.
+set_source_files_properties(libc_stubs.c PROPERTIES
+    COMPILE_FLAGS "-fno-builtin"
+)
+
 # ---------------------------------------------------------------------------
 # Include paths
 # ---------------------------------------------------------------------------

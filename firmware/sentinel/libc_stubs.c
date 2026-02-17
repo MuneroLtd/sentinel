@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: MIT
 // Minimal C runtime stubs for -nostdlib bare-metal M4 firmware
+//
+// CRITICAL: GCC at -O2 recognises byte-loop patterns and replaces them with
+// calls to memset/memcpy/memmove/memcmp — even inside the implementations
+// themselves, creating infinite recursion that overflows the stack.
+// Compile this file with -fno-builtin (set in CMakeLists.txt) or use the
+// inhibit_loop_to_libcall pragma to prevent this.
 
 #include <stddef.h>
 #include <stdint.h>
 #include <errno.h>
+
+#pragma GCC optimize("-fno-tree-loop-distribute-patterns")
 
 void* memset(void* s, int c, size_t n) {
     unsigned char* p = (unsigned char*)s;

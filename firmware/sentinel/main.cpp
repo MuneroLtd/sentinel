@@ -178,7 +178,7 @@ static void boot_animation() {
     font_draw_str(tag_x, 120, tagline, colors::DARK_GREEN, colors::BLACK);
 
     // Version
-    static const char ver[] = "v0.1.3";
+    static const char ver[] = "v0.1.9";
     int ver_x = (LCD_WIDTH - static_cast<int>(sizeof(ver) - 1) * FONT_W) / 2;
     font_draw_str(ver_x, 140, ver, colors::GREY, colors::BLACK);
 
