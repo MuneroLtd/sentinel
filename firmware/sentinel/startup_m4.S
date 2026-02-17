@@ -106,6 +106,18 @@ _vectors:
     .thumb_func
 Reset_Handler:
 
+    /* ---- 0. Enable FPU (Cortex-M4F) ---- */
+    /* The FPU is disabled at reset.  With -mfloat-abi=hard the      */
+    /* compiler emits VFP instructions freely; any such instruction   */
+    /* with the FPU off triggers UsageFault → HardFault.  Must be    */
+    /* enabled BEFORE init_array (C++ global constructors use float). */
+    ldr     r0, =0xE000ED88     /* SCB->CPACR */
+    ldr     r1, [r0]
+    orr     r1, r1, #(0xF << 20) /* CP10 + CP11 = full access */
+    str     r1, [r0]
+    dsb
+    isb
+
     /* ============================================================= */
     /* DIAGNOSTIC: Blink LED1 (GPIO2[1], P4_1) at each startup stage */
     /* Pure register writes — no C/C++ dependencies.                 */
