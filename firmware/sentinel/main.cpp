@@ -191,6 +191,18 @@ static void boot_animation() {
 // ---------------------------------------------------------------------------
 // sentinel_main — called by startup code as the C entry point
 // ---------------------------------------------------------------------------
+// Simple diagnostic LED blink helper (pure GPIO, no dependencies)
+static void diag_blink_led1(int count) {
+    for (int i = 0; i < count; i++) {
+        gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
+        for (volatile uint32_t d = 0; d < 5000000; d++) { __asm volatile("nop"); }
+        gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
+        for (volatile uint32_t d = 0; d < 5000000; d++) { __asm volatile("nop"); }
+    }
+    // Pause between stages
+    for (volatile uint32_t d = 0; d < 15000000; d++) { __asm volatile("nop"); }
+}
+
 extern "C" void sentinel_main() {
 
     // -------------------------------------------------------------------------
@@ -211,16 +223,14 @@ extern "C" void sentinel_main() {
         scu_set_pinmode(LED3_SCU_GRP, LED3_SCU_PIN, LED3_SCU_FUNC, SCU_MODE_INACT);
         gpio_set_dir(LED3_GPIO_PORT, LED3_GPIO_PIN, true);
 
-        // Blink LED1 three times (~100ms on/off at IRC speed)
-        for (int i = 0; i < 3; i++) {
-            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
-            for (volatile uint32_t d = 0; d < 3000000; d++) { __asm volatile("nop"); }
-            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
-            for (volatile uint32_t d = 0; d < 3000000; d++) { __asm volatile("nop"); }
-        }
+        // Turn off LED3 (was left on by startup diagnostics)
+        gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, false);
 
         // Leave LED2 on as "boot in progress" indicator
         gpio_write(LED2_GPIO_PORT, LED2_GPIO_PIN, true);
+
+        // 1 blink = sentinel_main entered
+        diag_blink_led1(1);
     }
 
     // -------------------------------------------------------------------------
@@ -228,6 +238,9 @@ extern "C" void sentinel_main() {
     //    204 MHz core clock and enabled peripheral clocks.
     // -------------------------------------------------------------------------
     clocks_init();
+
+    // 2 blinks = clocks_init done
+    diag_blink_led1(2);
 
     // -------------------------------------------------------------------------
     // 2. UART pin mux + UART init for debug output
@@ -242,6 +255,9 @@ extern "C" void sentinel_main() {
     uart_puts("\r\n[SENTINEL] Boot\r\n");
     uart_printf("[SENTINEL] Core clock: %u Hz\r\n", clocks_get_cpu_hz());
 
+    // 3 blinks = UART init done
+    diag_blink_led1(3);
+
     // -------------------------------------------------------------------------
     // 2b. LCD initialisation — ILI9341 via SSP1
     //     lcd_init() handles SCU pin mux, SSP1 init, HW reset, and full
@@ -249,8 +265,14 @@ extern "C" void sentinel_main() {
     // -------------------------------------------------------------------------
     uart_puts("[SENTINEL] Initialising LCD...\r\n");
     lcd_init();
+    // 4 blinks = LCD init done
+    diag_blink_led1(4);
+
     uart_puts("[SENTINEL] LCD ready. Running boot animation...\r\n");
     boot_animation();
+
+    // 5 blinks = boot animation done
+    diag_blink_led1(5);
 
     // -------------------------------------------------------------------------
     // 3. SGPIO pin mux — 8 data pins + 1 clock pin for baseband IQ capture
@@ -353,6 +375,9 @@ extern "C" void sentinel_main() {
 
     uart_puts("[SENTINEL] M0 core started.\r\n");
 
+    // 6 blinks = M0 released, SGPIO running
+    diag_blink_led1(6);
+
     // -------------------------------------------------------------------------
     // 9. Initialise the event bus (creates FreeRTOS mutex — must be before
     //    vTaskStartScheduler but can be done without the scheduler running
@@ -370,6 +395,9 @@ extern "C" void sentinel_main() {
     // -------------------------------------------------------------------------
     sentinel_create_tasks();
     uart_puts("[SENTINEL] Tasks created. Starting scheduler...\r\n");
+
+    // 7 blinks = everything ready, about to start scheduler
+    diag_blink_led1(7);
 
     // Turn off LED2 ("boot in progress"), turn on LED3 ("boot complete")
     gpio_write(LED2_GPIO_PORT, LED2_GPIO_PIN, false);
