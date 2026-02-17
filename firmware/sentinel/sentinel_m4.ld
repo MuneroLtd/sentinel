@@ -194,6 +194,7 @@ SECTIONS
 /* Expose symbols used by startup code */
 PROVIDE(_etext = LOADADDR(.data) + SIZEOF(.data));
 PROVIDE(_end   = _bss_end);
+PROVIDE(end    = _bss_end);
 
 /* Sanity: ensure stack does not overlap BSS */
 ASSERT(_stack_bottom >= _bss_end,

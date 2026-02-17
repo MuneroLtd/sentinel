@@ -130,6 +130,10 @@ add_executable(sentinel_m4
 
     # FreeRTOS runtime stats counter
     freertos/sentinel_runtime.cpp
+
+    # Bare-metal runtime stubs
+    libc_stubs.c
+    cxx_stubs.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -159,16 +163,31 @@ target_link_options(sentinel_m4 PRIVATE
     -T${CMAKE_CURRENT_SOURCE_DIR}/sentinel_m4.ld
     -Wl,--gc-sections
     -Wl,--print-memory-usage
-    # Embed M0 binary as a named section
-    -Wl,-b,binary,${BASEBAND_BIN}
-    # Wrap _start so that the embedded binary symbols are accessible
-    -Wl,--format=binary
-    -Wl,--oformat=elf32-littlearm
 )
+
+# Embed M0 baseband binary: switch input format to binary, include file,
+# then switch back to ELF so remaining libraries link correctly.
+target_link_libraries(sentinel_m4 PRIVATE
+    -Wl,--format=binary
+    -Wl,${BASEBAND_BIN}
+    -Wl,--format=default
+)
+
+# Find runtime libraries for -nostdlib bare-metal build
+set(_M4_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
+foreach(_lib libgcc.a libc_nano.a libnosys.a libm.a)
+    execute_process(
+        COMMAND ${CMAKE_C_COMPILER} ${_M4_FLAGS} -print-file-name=${_lib}
+        OUTPUT_VARIABLE _path
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    list(APPEND M4_RUNTIME_LIBS ${_path})
+endforeach()
 
 target_link_libraries(sentinel_m4 PRIVATE
     freertos_kernel
     fatfs
+    ${M4_RUNTIME_LIBS}
 )
 
 # ---------------------------------------------------------------------------
@@ -182,7 +201,10 @@ add_custom_command(TARGET sentinel_m4 POST_BUILD
     COMMENT "Creating sentinel_m4.bin for flash programming"
 )
 
-add_custom_command(TARGET sentinel_m4 POST_BUILD
-    COMMAND ${CMAKE_SIZE} $<TARGET_FILE:sentinel_m4>
-    COMMENT "Firmware size report"
-)
+find_program(ARM_SIZE arm-none-eabi-size)
+if(ARM_SIZE)
+    add_custom_command(TARGET sentinel_m4 POST_BUILD
+        COMMAND ${ARM_SIZE} $<TARGET_FILE:sentinel_m4>
+        COMMENT "Firmware size report"
+    )
+endif()
