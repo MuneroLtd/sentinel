@@ -244,7 +244,7 @@ Reset_Handler:
     movs    r3, #2              /* bit 1 */
     str     r3, [r5]            /* GPIO2 SET */
     /* Delay ~200ms */
-    ldr     r2, =800000
+    ldr     r2, =20000000
 .Ldb_on_dly:
     subs    r2, #1
     bne     .Ldb_on_dly
@@ -252,7 +252,7 @@ Reset_Handler:
     ldr     r1, =0x400F6288     /* GPIO_PORT_BASE + 0x2280 + 2*4 */
     str     r3, [r1]            /* GPIO2 CLR */
     /* Delay ~200ms */
-    ldr     r2, =800000
+    ldr     r2, =20000000
 .Ldb_off_dly:
     subs    r2, #1
     bne     .Ldb_off_dly
@@ -260,7 +260,7 @@ Reset_Handler:
     b       .Ldb_loop
 .Ldb_pause:
     /* Pause ~600ms between stages */
-    ldr     r2, =2400000
+    ldr     r2, =60000000
 .Ldb_pause_dly:
     subs    r2, #1
     bne     .Ldb_pause_dly
