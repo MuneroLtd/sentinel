@@ -6,7 +6,31 @@ Custom firmware for the **HackRF One + PortaPack H4M** that replaces the stock M
 
 The [HackRF One](https://greatscottgadgets.com/hackrf/) is a 1 MHz - 6 GHz software-defined radio (SDR). The [PortaPack H4M](https://www.aliexpress.com/item/portapack-h4m.html) is an add-on board with an LCD, audio codec, buttons, and an ESP32-S3 — turning the HackRF into a standalone handheld device.
 
-Most people run the [Mayhem firmware](https://github.com/portapack-mayhem/mayhem-firmware), which provides a collection of standalone radio tools. Sentinel is different: it runs **FreeRTOS** on the M4 core with an **event bus** for inter-task communication, enabling background scanning, concurrent apps, and ESP32 co-processor integration.
+Most people run the [Mayhem firmware](https://github.com/portapack-mayhem/mayhem-firmware), which provides a large collection of radio tools. Sentinel is a from-scratch replacement with a fundamentally different architecture.
+
+## Why not Mayhem?
+
+Mayhem runs a **cooperative single-threaded event loop** on the M4 core. One app runs at a time — when you open the spectrum analyzer, that's all the M4 is doing. Switch to another app and the previous one is torn down completely. There is no background processing, no concurrent tasks, and no shared state between apps. The device forgets everything between sessions.
+
+This is fine for a toolbox of standalone radio utilities, but it means you **cannot**:
+- Scan for signals in the background while using another app
+- Correlate detections across multiple sessions or frequencies
+- Run a long-duration capture while monitoring the UI
+- Stream data to a network while doing local processing
+
+These aren't missing features — they're architectural limitations of a single-threaded event loop.
+
+**Sentinel** replaces this with **FreeRTOS** on the M4, giving the firmware preemptive multitasking with 7 concurrent tasks. An **event bus** lets tasks communicate asynchronously (e.g. a background scanner publishing a detection that the UI task renders as an alert). The M0 baseband core feeds IQ data into shared memory that any M4 task can consume without blocking the others.
+
+| | Mayhem | Sentinel |
+|---|--------|----------|
+| M4 scheduler | Cooperative event loop | FreeRTOS (preemptive) |
+| Concurrent apps | No — one at a time | Yes — 7 tasks run simultaneously |
+| Background scanning | Not possible | Background scanner task |
+| Inter-app communication | None | Event bus (publish/subscribe) |
+| Session memory | None — forgets on app switch | Knowledge base task (SD card) |
+| ESP32-S3 integration | Basic GPIO | Co-processor over I2C/SPI |
+| IQ data path | Same (SGPIO from CPLD) | Same (SGPIO from CPLD) |
 
 ## Hardware
 
