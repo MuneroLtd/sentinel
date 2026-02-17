@@ -158,8 +158,8 @@ static void boot_animation() {
             }
         }
 
-        // ~25ms per frame (busy wait, no timer yet)
-        for (volatile uint32_t d = 0; d < 500000; d++) {
+        // ~25ms per frame at 96 MHz (busy wait, no timer yet)
+        for (volatile uint32_t d = 0; d < 250000; d++) {
             __asm volatile("nop");
         }
     }
@@ -182,8 +182,8 @@ static void boot_animation() {
     int ver_x = (LCD_WIDTH - static_cast<int>(sizeof(ver) - 1) * FONT_W) / 2;
     font_draw_str(ver_x, 140, ver, colors::GREY, colors::BLACK);
 
-    // Hold branding for 1 second
-    for (volatile uint32_t d = 0; d < 10000000; d++) {
+    // Hold branding for ~1 second at 96 MHz
+    for (volatile uint32_t d = 0; d < 5000000; d++) {
         __asm volatile("nop");
     }
 }
@@ -214,9 +214,9 @@ extern "C" void sentinel_main() {
         // Blink LED1 three times (~100ms on/off at IRC speed)
         for (int i = 0; i < 3; i++) {
             gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
-            for (volatile uint32_t d = 0; d < 400000; d++) { __asm volatile("nop"); }
+            for (volatile uint32_t d = 0; d < 3000000; d++) { __asm volatile("nop"); }
             gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
-            for (volatile uint32_t d = 0; d < 400000; d++) { __asm volatile("nop"); }
+            for (volatile uint32_t d = 0; d < 3000000; d++) { __asm volatile("nop"); }
         }
 
         // Leave LED2 on as "boot in progress" indicator

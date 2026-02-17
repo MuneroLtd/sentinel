@@ -75,11 +75,11 @@ static constexpr uint8_t MADCTL_MH  = 0x04;  // Horizontal refresh order
 static constexpr uint8_t MADCTL_LANDSCAPE = MADCTL_MX | MADCTL_MV;
 
 // ---------------------------------------------------------------------------
-// Simple microsecond delay (rough, calibrated for 204 MHz core)
-// Each iteration ≈ 5 cycles → 204M/5 = ~40.8M iter/s
+// Simple microsecond delay (rough, calibrated for 96 MHz core)
+// Each iteration ≈ 5 cycles → 96M/5 = ~19.2M iter/s
 // ---------------------------------------------------------------------------
 static void delay_us(uint32_t us) {
-    volatile uint32_t count = us * 41u;
+    volatile uint32_t count = us * 19u;
     while (count--) {
         __asm volatile("nop");
     }

@@ -109,6 +109,7 @@ static constexpr uint32_t CGU_CLK_SRC_IRC        = (0x01u << 24); // 12 MHz IRC
 static constexpr uint32_t CGU_CLK_SRC_XTAL       = (0x06u << 24); // Crystal osc
 static constexpr uint32_t CGU_CLK_SRC_PLL1       = (0x09u << 24); // PLL1 output
 static constexpr uint32_t CGU_CLK_SRC_IDIVB      = (0x0Du << 24); // Integer divider B output
+static constexpr uint32_t CGU_CLK_SRC_IDIVC      = (0x0Eu << 24); // Integer divider C output
 
 // ---------------------------------------------------------------------------
 // CCU — Clock Control Unit  (UM10503 §13)

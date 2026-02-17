@@ -2,7 +2,7 @@
 
 // ============================================================
 // Project Sentinel - FreeRTOS Configuration
-// Target: LPC4320 Cortex-M4 @ 204MHz
+// Target: LPC4320 Cortex-M4 @ 96MHz (boot ROM: PLL1=288MHz, IDIVC=PLL1/3)
 // Port: GCC/ARM_CM4F (hardware FPU enabled)
 // ============================================================
 
@@ -12,7 +12,7 @@
 #define configUSE_IDLE_HOOK                     1
 #define configUSE_TICK_HOOK                     0
 #define configUSE_TICKLESS_IDLE                 0
-#define configCPU_CLOCK_HZ                      204000000UL
+#define configCPU_CLOCK_HZ                      96000000UL
 #define configTICK_RATE_HZ                      1000U       // 1ms resolution
 #define configMAX_PRIORITIES                    8
 #define configMINIMAL_STACK_SIZE                128         // Idle task (words)

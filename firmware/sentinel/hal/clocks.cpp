@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: MIT
 // Project Sentinel — LPC4320 Clock Initialization
 //
-// Target: PLL1 locked to 204 MHz using 12 MHz IRC oscillator.
+// IMPORTANT: We execute from SPIFI flash (XIP at 0x00000000).
+// The LPC4320 boot ROM has already configured PLL1 and the clock tree:
 //
-// PLL1 output formula (direct mode, FBSEL=1):
-//   Fout = Fin * (MSEL + 1)
-//   Fin  = IRC = 12 MHz
-//   MSEL = 16  → Fout = 12 * 17 = 204 MHz
+//   PLL1:           IRC × 24 = 288 MHz
+//   IDIVB:          PLL1 / 9 = 32 MHz  → BASE_SPIFI_CLK
+//   IDIVC:          PLL1 / 3 = 96 MHz  → BASE_M4_CLK
 //
-// Sequence (per UM10503 §12.4.2):
-//  1. Switch BASE_M4_CLK to safe IRC
-//  2. Configure PLL1 (still powered down / not yet locked)
-//  3. Power up PLL1 and wait for lock
-//  4. Switch BASE_M4_CLK to PLL1
-//  5. Enable branch clocks for each peripheral
+// We MUST NOT power-down or reconfigure PLL1 while SPIFI is sourced from it,
+// or the SPIFI clock dies and the CPU can't fetch the next instruction.
+//
+// Strategy: leave PLL1 and the M4/SPIFI clocks alone. Just set up peripheral
+// base clocks (SSP, UART, etc.) and enable CCU branch clocks. This gives us
+// a stable 96 MHz M4 with working SPIFI from the boot ROM configuration.
+//
+// We optionally boost SPIFI to 96 MHz (PLL1/3 via IDIVB) once peripheral
+// clocks are set up, since the W25Q80BV supports up to 104 MHz.
 
 #include "clocks.hpp"
 #include "lpc4320_regs.hpp"
@@ -22,27 +25,12 @@
 // Local constants
 // ---------------------------------------------------------------------------
 
-static constexpr uint32_t IRC_FREQ_HZ  = 12000000u;
-static constexpr uint32_t CPU_FREQ_HZ  = 204000000u;
-static constexpr uint32_t PCLK_FREQ_HZ = CPU_FREQ_HZ / 2u;  // peripheral APB divider = 2
-
-// PLL1 CTRL value for 204 MHz direct mode (UM10503 Table 147):
-//   CLK_SEL [28:24] = 0x01 (IRC 12 MHz input)
-//   MSEL    [23:16] = 16   → M = 17 → Fout = 12 * 17 = 204 MHz
-//   NSEL    [13:12] = 0    → N = 1 (no pre-divider)
-//   PSEL    [9:8]   = 0    → P = 1 (irrelevant when DIRECT=1)
-//   DIRECT  [7]     = 1    (bypass output divider)
-//   FBSEL   [6]     = 1    (feedback from PLL output)
-//   BYPASS  [1]     = 0    (output = PLL, not passthrough)
-//   PD      [0]     = 0    (powered up)
-static constexpr uint32_t PLL1_CTRL_204MHZ =
-    CGU_PLL1_CTRL_FBSEL  |  // bit 6
-    CGU_PLL1_CTRL_DIRECT |  // bit 7
-    (16u << 16)           |  // MSEL = 16 at bits [23:16]
-    CGU_CLK_SRC_IRC;         // CLK_SEL = IRC at bits [28:24]
+// Boot ROM leaves M4 on IDIVC = PLL1/3 = 96 MHz
+static constexpr uint32_t CPU_FREQ_HZ  = 96000000u;
+static constexpr uint32_t PCLK_FREQ_HZ = CPU_FREQ_HZ;  // APB runs at CPU speed on LPC43xx
 
 // ---------------------------------------------------------------------------
-// Simple busy-wait loop (~1 µs per iteration at slow clocks — generous enough)
+// Simple busy-wait loop
 // ---------------------------------------------------------------------------
 static void busy_wait(volatile uint32_t count) {
     while (count--) {
@@ -54,58 +42,32 @@ static void busy_wait(volatile uint32_t count) {
 // clocks_init
 // ---------------------------------------------------------------------------
 void clocks_init() {
-    // -------- Step 1: Switch M4 base clock to safe IRC -----------------------
-    // Make sure we're on IRC before touching PLL1.
-    // BASE_M4_CLK: AUTOBLOCK=1, CLK_SRC = IRC (0x01)
-    *CGU_BASE_M4_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_IRC;
-    busy_wait(1000);
+    // -------- Step 1: Peripheral base clocks ----------------------------------
+    // Source peripheral clocks from IDIVC (PLL1/3 = 96 MHz), same as M4 core.
+    // This keeps all peripheral baud/clock calculations consistent with
+    // clocks_get_pclk_hz() = 96 MHz.
+    //
+    // We do NOT touch BASE_M4_CLK or BASE_SPIFI_CLK — the boot ROM set
+    // those up correctly and we're executing from SPIFI.
 
-    // -------- Step 2: Configure and power up PLL1 ----------------------------
-    // First write with PD=1 (powered down) to configure safely
-    *CGU_PLL1_CTRL = PLL1_CTRL_204MHZ | CGU_PLL1_CTRL_PD;
+    // APB1 and APB3
+    *CGU_BASE_APB1_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_IDIVC;
+    *CGU_BASE_APB3_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_IDIVC;
+
+    // SSP0 and SSP1 (shared SPI bus for LCD, RF ICs)
+    *CGU_BASE_SSP0_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_IDIVC;
+    *CGU_BASE_SSP1_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_IDIVC;
+
+    // UART0 (debug console)
+    *CGU_BASE_UART0_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_IDIVC;
+
+    // SGPIO peripheral clock (for baseband IQ capture)
+    *CGU_BASE_PERIPH_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_IDIVC;
+
     busy_wait(100);
 
-    // Now power up PLL1 (clear PD bit)
-    *CGU_PLL1_CTRL = PLL1_CTRL_204MHZ;
-
-    // -------- Step 3: Wait for PLL1 lock -------------------------------------
-    // Poll STAT[0] (LOCK bit). Should lock within ~300 µs at 12 MHz IRC.
-    uint32_t timeout = 100000u;
-    while ((*CGU_PLL1_STAT & CGU_PLL1_STAT_LOCK) == 0u) {
-        if (--timeout == 0u) {
-            // PLL failed to lock — stay on IRC (safe fallback)
-            return;
-        }
-    }
-
-    // -------- Step 4: Configure SPIFI clock BEFORE switching M4 to PLL1 -----
-    // We execute from SPIFI flash (XIP). The boot ROM left SPIFI on IRC.
-    // Set up IDIVB = PLL1 / 2 = 102 MHz, then source SPIFI from IDIVB.
-    // This keeps SPIFI at a safe speed for the W25Q80BV (max 104 MHz).
-    *CGU_IDIVB_CTRL = CGU_BASE_CLK_AUTOBLOCK | (0x1u << 2) | CGU_CLK_SRC_PLL1;
-    busy_wait(100);
-    *CGU_BASE_SPIFI_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_IDIVB;
-    busy_wait(100);
-
-    // -------- Step 5: Switch BASE_M4_CLK to PLL1 ----------------------------
-    // AUTOBLOCK ensures glitch-free transition.
-    *CGU_BASE_M4_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
-    busy_wait(100);
-
-    // -------- Step 6: Set up peripheral base clocks ----------------------------
-    // APB1 and APB3 clocked from PLL1 directly (many peripherals have internal /2)
-    *CGU_BASE_APB1_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
-    *CGU_BASE_APB3_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
-
-    // SSP clocks — from PLL1
-    *CGU_BASE_SSP0_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
-    *CGU_BASE_SSP1_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
-
-    // UART0 clock — from PLL1
-    *CGU_BASE_UART0_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
-
-    // -------- Step 7: Enable CCU branch clocks -------------------------------
-    // Each branch: set RUN | AUTO bits so the clock is always running.
+    // -------- Step 2: Enable CCU branch clocks --------------------------------
+    // Each branch: set RUN | AUTO bits.
 
     // GPIO (CCU1)
     *CCU1_CLK_M4_GPIO_CFG = CCU_CLK_RUN | CCU_CLK_AUTO;
@@ -125,15 +87,15 @@ void clocks_init() {
     // I2C1 (CCU2 APB1)
     *CCU2_CLK_APB1_I2C1_CFG = CCU_CLK_RUN | CCU_CLK_AUTO;
 
-    // -------- Step 8: SGPIO peripheral clock (for baseband IQ capture) --------
-    // BASE_PERIPH_CLK drives SGPIO — source from PLL1 (204 MHz)
-    *CGU_BASE_PERIPH_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
-
     // SGPIO branch clock (CCU1)
     *CCU1_CLK_PERIPH_SGPIO_CFG = CCU_CLK_RUN | CCU_CLK_AUTO;
 
-    // Short settling wait
-    busy_wait(500);
+    // -------- Step 3: SPIFI clock left at boot ROM default ---------------------
+    // Boot ROM runs SPIFI at 32 MHz (IDIVB = PLL1/9) with standard SPI read.
+    // Boosting requires reconfiguring SPIFI controller for fast/quad read mode
+    // with correct dummy cycles. Leave at 32 MHz for stability; optimize later.
+
+    busy_wait(200);
 }
 
 // ---------------------------------------------------------------------------
