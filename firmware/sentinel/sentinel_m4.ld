@@ -3,7 +3,7 @@
 /*                                                                             */
 /* Memory map (LPC4320 UM10503):                                               */
 /*   Flash (SPI NOR via SPIFI, memory-mapped): 0x00000000 – 0x000FFFFF  1 MB  */
-/*   M4 SRAM0 (local bus):                     0x10000000 – 0x1001FFFF 128 KB */
+/*   M4 SRAM0 (local bus):                     0x10000000 – 0x10017FFF  96 KB */
 /*   AHB SRAM (M0 DMA buffers):                0x20000000 – 0x20003FFF  16 KB */
 /*   AHB SRAM (M4 heap/statics):               0x20004000 – 0x20007FFF  16 KB */
 /*   M0 SRAM (reserved):                       0x10080000 – 0x10087FFF   8 KB */
@@ -44,7 +44,7 @@ MEMORY
 
 /* Stack size: 4 KB at the top of SRAM0 */
 _stack_size = 0x1000;
-_stack_top  = ORIGIN(SRAM0) + LENGTH(SRAM0);  /* 0x10020000 */
+_stack_top  = ORIGIN(SRAM0) + LENGTH(SRAM0);  /* 0x10018000 */
 
 SECTIONS
 {
@@ -117,9 +117,10 @@ SECTIONS
         . = ALIGN(4);
         _m0_binary_start = .;
         KEEP(*(.m0_binary))
-        /* When linked with -b binary the object has one section named    */
-        /* .data; objcopy renames it to the basename. We catch both.      */
-        KEEP(*(SORT_NONE(.data)))
+        /* When linked with --format=binary the object has one section    */
+        /* named .data. Match ONLY the baseband binary file, not C/C++   */
+        /* objects (which also have .data sections for initialized vars). */
+        KEEP(*baseband.bin(SORT_NONE(.data)))
         . = ALIGN(4);
         _m0_binary_end = .;
     } > FLASH
