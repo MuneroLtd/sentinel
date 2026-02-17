@@ -65,6 +65,36 @@ extern "C" void sentinel_create_tasks();
 extern "C" void sentinel_main() {
 
     // -------------------------------------------------------------------------
+    // 0. Early LED heartbeat — blink LED1 before clocks_init to prove the
+    //    M4 is alive.  Uses IRC clock (~12 MHz), GPIO2 is on APB which is
+    //    always clocked.  SCU defaults allow GPIO function on most pins.
+    // -------------------------------------------------------------------------
+    {
+        // Configure LED1 (P4_1 → GPIO2[1]) as output
+        scu_set_pinmode(LED1_SCU_GRP, LED1_SCU_PIN, LED1_SCU_FUNC, SCU_MODE_INACT);
+        gpio_set_dir(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
+
+        // Configure LED2 (P4_2 → GPIO2[2]) as output
+        scu_set_pinmode(LED2_SCU_GRP, LED2_SCU_PIN, LED2_SCU_FUNC, SCU_MODE_INACT);
+        gpio_set_dir(LED2_GPIO_PORT, LED2_GPIO_PIN, true);
+
+        // Configure LED3 (P6_12 → GPIO2[8]) as output
+        scu_set_pinmode(LED3_SCU_GRP, LED3_SCU_PIN, LED3_SCU_FUNC, SCU_MODE_INACT);
+        gpio_set_dir(LED3_GPIO_PORT, LED3_GPIO_PIN, true);
+
+        // Blink LED1 three times (~100ms on/off at IRC speed)
+        for (int i = 0; i < 3; i++) {
+            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
+            for (volatile uint32_t d = 0; d < 400000; d++) { __asm volatile("nop"); }
+            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
+            for (volatile uint32_t d = 0; d < 400000; d++) { __asm volatile("nop"); }
+        }
+
+        // Leave LED2 on as "boot in progress" indicator
+        gpio_write(LED2_GPIO_PORT, LED2_GPIO_PIN, true);
+    }
+
+    // -------------------------------------------------------------------------
     // 1. Clock initialisation — must be first; all subsequent code assumes
     //    204 MHz core clock and enabled peripheral clocks.
     // -------------------------------------------------------------------------
@@ -201,6 +231,10 @@ extern "C" void sentinel_main() {
     // -------------------------------------------------------------------------
     sentinel_create_tasks();
     uart_puts("[SENTINEL] Tasks created. Starting scheduler...\r\n");
+
+    // Turn off LED2 ("boot in progress"), turn on LED3 ("boot complete")
+    gpio_write(LED2_GPIO_PORT, LED2_GPIO_PIN, false);
+    gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, true);
 
     // -------------------------------------------------------------------------
     // 11. Start the FreeRTOS scheduler — should never return.

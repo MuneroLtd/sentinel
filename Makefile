@@ -14,7 +14,8 @@
 
 BUILD_DIR ?= build
 JOBS      ?= $(shell nproc 2>/dev/null || echo 4)
-TOOLCHAIN := cmake/arm-none-eabi.cmake
+ROOT_DIR  := $(shell cd "$(dir $(lastword $(MAKEFILE_LIST)))" && pwd)
+TOOLCHAIN := $(ROOT_DIR)/cmake/arm-none-eabi.cmake
 BUILD_TYPE ?= Release
 
 # CMake invocation flags shared by both sub-builds

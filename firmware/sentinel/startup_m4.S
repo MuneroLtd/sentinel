@@ -29,7 +29,7 @@ _vectors:
     .word   MemManage_Handler       /*  4  0x010  MPU Fault                   */
     .word   BusFault_Handler        /*  5  0x014  Bus Fault                   */
     .word   UsageFault_Handler      /*  6  0x018  Usage Fault                 */
-    .word   0                       /*  7  0x01C  Reserved                    */
+    .word   0                       /*  7  0x01C  Boot checksum (patched post-build) */
     .word   0                       /*  8  0x020  Reserved                    */
     .word   0                       /*  9  0x024  Reserved                    */
     .word   0                       /* 10  0x028  Reserved                    */

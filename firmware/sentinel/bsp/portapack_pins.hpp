@@ -219,6 +219,32 @@ static constexpr uint8_t UART0_RX_SCU_PIN   = 1;
 static constexpr uint8_t UART0_RX_SCU_FUNC  = 1;
 
 // ===========================================================================
+// HackRF One LEDs (active high, accent LEDs on the HackRF PCB)
+// These are directly on the HackRF board, not on the PortaPack.
+// Useful for early-boot heartbeat before the LCD is initialised.
+// ===========================================================================
+// LED1: P4_1 → GPIO2[1]
+static constexpr uint8_t LED1_SCU_GRP      = 4;
+static constexpr uint8_t LED1_SCU_PIN      = 1;
+static constexpr uint8_t LED1_SCU_FUNC     = 0;  // GPIO
+static constexpr uint8_t LED1_GPIO_PORT    = 2;
+static constexpr uint8_t LED1_GPIO_PIN     = 1;
+
+// LED2: P4_2 → GPIO2[2]
+static constexpr uint8_t LED2_SCU_GRP      = 4;
+static constexpr uint8_t LED2_SCU_PIN      = 2;
+static constexpr uint8_t LED2_SCU_FUNC     = 0;  // GPIO
+static constexpr uint8_t LED2_GPIO_PORT    = 2;
+static constexpr uint8_t LED2_GPIO_PIN     = 2;
+
+// LED3: P6_12 → GPIO2[8]
+static constexpr uint8_t LED3_SCU_GRP      = 6;
+static constexpr uint8_t LED3_SCU_PIN      = 12;
+static constexpr uint8_t LED3_SCU_FUNC     = 0;  // GPIO
+static constexpr uint8_t LED3_GPIO_PORT    = 2;
+static constexpr uint8_t LED3_GPIO_PIN     = 8;
+
+// ===========================================================================
 // Navigation input (H4M)
 // H4M uses a touchscreen + rotary encoder routed through the EPM240 CPLD —
 // NOT direct GPIO pins.  A proper nav driver will be added when the EPM240

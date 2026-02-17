@@ -204,6 +204,19 @@ add_custom_command(TARGET sentinel_m4 POST_BUILD
     COMMENT "Creating sentinel_m4.bin for flash programming"
 )
 
+# Patch LPC4320 boot ROM checksum at offset 0x1C.
+# The sum of vector table words[0..7] must equal zero or the boot ROM
+# refuses to jump to user code (UM10503 §6.4.4.1).
+find_program(PYTHON3 python3)
+if(PYTHON3)
+    add_custom_command(TARGET sentinel_m4 POST_BUILD
+        COMMAND ${PYTHON3}
+                ${CMAKE_CURRENT_SOURCE_DIR}/../tools/lpc_checksum.py
+                ${CMAKE_CURRENT_BINARY_DIR}/sentinel_m4.bin
+        COMMENT "Patching LPC4320 boot checksum"
+    )
+endif()
+
 find_program(ARM_SIZE arm-none-eabi-size)
 if(ARM_SIZE)
     add_custom_command(TARGET sentinel_m4 POST_BUILD
