@@ -118,50 +118,24 @@ Reset_Handler:
     dsb
     isb
 
-    /* ============================================================= */
-    /* DIAGNOSTIC: Blink LED1 (GPIO2[1], P4_1) at each startup stage */
-    /* Pure register writes — no C/C++ dependencies.                 */
-    /*                                                               */
-    /*   Stage 0: 1 blink  → Reset_Handler reached                  */
-    /*   Stage 1: 2 blinks → .data copy done                        */
-    /*   Stage 2: 3 blinks → .bss zero done                         */
-    /*   Stage 3: 4 blinks → .ahbram zero done                      */
-    /*   Stage 4: 5 blinks → init_array done (C++ ctors complete)   */
-    /*   Stage 5: 6 blinks → about to call sentinel_main            */
-    /*                                                               */
-    /* Expected total pattern: 1, pause, 2, pause, 3, pause, 4,     */
-    /* pause, 5, pause, 6, then sentinel_main LED blinks take over.  */
-    /* ============================================================= */
-
-    /* --- Set up LED1: P4_1 = GPIO2[1] --- */
-    /* SCU P4_1 at 0x40086204: func 0 (GPIO), no pull */
-    ldr     r6, =0x40086204
-    movs    r7, #0
-    str     r7, [r6]
-
-    /* --- Set up LED2: P4_2 = GPIO2[2] --- */
+    /* ---- 1. Set up LED2 as "boot alive" indicator ---- */
     /* SCU P4_2 at 0x40086208: func 0 (GPIO), no pull */
     ldr     r6, =0x40086208
     movs    r7, #0
     str     r7, [r6]
 
-    /* --- Set up LED3: P6_12 = GPIO2[8] --- */
-    /* SCU P6_12 at 0x40086630: func 0 (GPIO), no pull */
-    ldr     r6, =0x40086630
-    movs    r7, #0
-    str     r7, [r6]
-
-    /* GPIO2 DIR: set bits 1, 2, 8 as outputs (LED1, LED2, LED3) */
+    /* GPIO2 DIR: set bit 2 as output (LED2) */
     ldr     r6, =0x400F6008     /* GPIO_PORT_BASE + 0x2000 + 2*4 */
     ldr     r7, [r6]
-    orr     r7, r7, #0x106      /* bits 1, 2, 8 */
+    orr     r7, r7, #0x04      /* bit 2 = GPIO2[2] = LED2 */
     str     r7, [r6]
 
-    /* --- Stage 0: blink 1 time — we're alive --- */
-    movs    r0, #1
-    bl      .Ldiag_blink
+    /* LED2 ON */
+    ldr     r6, =0x400F6208     /* GPIO2 SET */
+    movs    r7, #4              /* bit 2 */
+    str     r7, [r6]
 
-    /* ---- 1. Copy .data from Flash (LMA) to SRAM (VMA) ---- */
+    /* ---- 2. Copy .data from Flash (LMA) to SRAM (VMA) ---- */
     ldr     r0, =_data_start
     ldr     r1, =_data_end
     ldr     r2, =_data_load
@@ -173,30 +147,20 @@ Reset_Handler:
     b       .Lcopy_data
 .Ldata_done:
 
-    /* --- Stage 1: blink 2 times — .data copy done --- */
-    movs    r0, #2
-    bl      .Ldiag_blink
-
-    /* ---- 2. Zero .bss ---- */
-.Lzero_bss:
+    /* ---- 3. Zero .bss ---- */
     ldr     r0, =_bss_start
     ldr     r1, =_bss_end
     movs    r2, #0
-.Lzero_loop:
+.Lzero_bss:
     cmp     r0, r1
     bge     .Lbss_done
     str     r2, [r0], #4
-    b       .Lzero_loop
+    b       .Lzero_bss
 .Lbss_done:
 
-    /* --- Stage 2: blink 3 times — .bss zero done --- */
-    movs    r0, #3
-    bl      .Ldiag_blink
-
-    /* ---- 2b. Zero .ahbram (FreeRTOS heap + task stacks) ---- */
+    /* ---- 4. Zero .ahbram (FreeRTOS heap + task stacks) ---- */
     /* The .ahbram section is NOLOAD so we must zero it explicitly.   */
     /* Without this, pvPortMalloc reads garbage heap metadata.         */
-.Lzero_ahbram:
     ldr     r0, =_ahbram_start
     ldr     r1, =_ahbram_end
     movs    r2, #0
@@ -207,23 +171,7 @@ Reset_Handler:
     b       .Lahbram_loop
 .Lahbram_done:
 
-    /* --- Stage 3: blink 4 times — .ahbram zero done --- */
-    movs    r0, #4
-    bl      .Ldiag_blink
-
-    /* ---- 3. C++ static constructors ---- */
-    /* Unrolled with LED2/LED3 indicators per init_array entry.     */
-    /*                                                               */
-    /*   LED2 ON  → about to call init_array[0] (AppHomeDashboard)  */
-    /*   LED3 ON  → init_array[0] done, about to call [1] (5 apps) */
-    /*   LED2 OFF → init_array[1] done, all constructors complete   */
-    /*                                                               */
-    /* If crash occurs:                                              */
-    /*   LED2 ON, LED3 OFF → crash in init_array[0]                 */
-    /*   LED2 ON, LED3 ON  → crash in init_array[1]                 */
-    /*   LED2 OFF          → both OK                                */
-.Lcall_init:
-    /* .preinit_array (expected empty) */
+    /* ---- 5. C++ static constructors (.preinit_array + .init_array) ---- */
     ldr     r4, =__preinit_array_start
     ldr     r5, =__preinit_array_end
 .Lpreinit_loop:
@@ -233,102 +181,23 @@ Reset_Handler:
     blx     r0
     b       .Lpreinit_loop
 
-    /* .init_array — unrolled with LED indicators */
 .Linit_array:
     ldr     r4, =__init_array_start
     ldr     r5, =__init_array_end
-
-    /* --- LED2 ON: about to call first entry --- */
-    ldr     r6, =0x400F6208     /* GPIO2 SET */
-    movs    r7, #4              /* bit 2 = GPIO2[2] = LED2 */
-    str     r7, [r6]
-
-    /* Call init_array[0] if it exists */
+.Linit_loop:
     cmp     r4, r5
     bge     .Linit_done
     ldr     r0, [r4], #4
     blx     r0
-
-    /* --- LED3 ON: first entry done, about to call second --- */
-    ldr     r6, =0x400F6208     /* GPIO2 SET */
-    movs    r7, #0              /* bit 8 = GPIO2[8] = LED3 */
-    orr     r7, r7, #(1 << 8)
-    str     r7, [r6]
-
-    /* Call init_array[1] if it exists */
-    cmp     r4, r5
-    bge     .Linit_done
-    ldr     r0, [r4], #4
-    blx     r0
-
-    /* Handle any remaining entries (unlikely) */
-.Linit_remain:
-    cmp     r4, r5
-    bge     .Linit_done
-    ldr     r0, [r4], #4
-    blx     r0
-    b       .Linit_remain
-
+    b       .Linit_loop
 .Linit_done:
-    /* --- LED2 OFF: all constructors done --- */
-    ldr     r6, =0x400F6288     /* GPIO2 CLR */
-    movs    r7, #4              /* LED2 off */
-    str     r7, [r6]
 
-    /* --- Stage 4: blink 5 times — init_array complete --- */
-    movs    r0, #5
-    bl      .Ldiag_blink
-
-    /* ---- 4. Jump to application ---- */
-    /* --- Stage 5: blink 6 times — about to call sentinel_main --- */
-    movs    r0, #6
-    bl      .Ldiag_blink
-
-.Lcall_main:
+    /* ---- 6. Jump to application ---- */
     bl      sentinel_main
 
-    /* ---- 5. Hang if sentinel_main returns ---- */
+    /* ---- 7. Hang if sentinel_main returns ---- */
 .Lhang:
     b       .Lhang
-
-/* --------------------------------------------------------------------- */
-/* Diagnostic blink subroutine                                           */
-/* Input: r0 = number of blinks                                          */
-/* Clobbers: r0, r1, r2, r3, lr (caller must use bl)                     */
-/* Blinks LED1 (GPIO2[1]) with ~200ms on/off at 12-96 MHz IRC/PLL       */
-/* --------------------------------------------------------------------- */
-.Ldiag_blink:
-    push    {r4, r5, lr}
-    mov     r4, r0              /* r4 = blink count */
-    /* GPIO2 SET register for LED1 */
-    ldr     r5, =0x400F6208     /* GPIO_PORT_BASE + 0x2200 + 2*4 */
-.Ldb_loop:
-    cbz     r4, .Ldb_pause
-    /* LED ON */
-    movs    r3, #2              /* bit 1 */
-    str     r3, [r5]            /* GPIO2 SET */
-    /* Delay ~200ms */
-    ldr     r2, =20000000
-.Ldb_on_dly:
-    subs    r2, #1
-    bne     .Ldb_on_dly
-    /* LED OFF */
-    ldr     r1, =0x400F6288     /* GPIO_PORT_BASE + 0x2280 + 2*4 */
-    str     r3, [r1]            /* GPIO2 CLR */
-    /* Delay ~200ms */
-    ldr     r2, =20000000
-.Ldb_off_dly:
-    subs    r2, #1
-    bne     .Ldb_off_dly
-    subs    r4, #1
-    b       .Ldb_loop
-.Ldb_pause:
-    /* Pause ~600ms between stages */
-    ldr     r2, =60000000
-.Ldb_pause_dly:
-    subs    r2, #1
-    bne     .Ldb_pause_dly
-    pop     {r4, r5, pc}
 
     .size   Reset_Handler, . - Reset_Handler
 

@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Project Sentinel — ILI9341 320×240 16-bit TFT LCD Driver
 //
-// Interface: SPI (SSP1), 8-bit transfers.
+// Interface: 8-bit parallel 8080-I bus via EPM240 CPLD.
+// The CPLD converts two 8-bit MCU bus cycles into one 16-bit LCD bus cycle.
 // Colour depth: 16 bits per pixel (RGB565).
-// Resolution: 320 × 240 landscape (or 240 × 320 portrait, selectable by rotation).
+// Resolution: 320 × 240 landscape (MADCTL with MV bit for row/col swap).
 //
-// Pin control is via GPIO (CS, DC, RST).  CS is active-low.
-// DC high = pixel/parameter data, DC low = command byte.
-// RST active-low hardware reset.
+// Control signals: WRX, RDX, ADDR (D/CX), DIR, IO_STBX on GPIO1/5.
+// Data bus: GPIO3[8:15] (P7_0..P7_7).
+// Backlight and LCD reset are controlled via the CPLD IO register.
 
 #pragma once
 #include <cstdint>
@@ -47,7 +48,8 @@ static constexpr uint16_t LCD_HEIGHT  = 240;
 // ---------------------------------------------------------------------------
 
 // Full ILI9341 hardware reset + initialisation sequence.
-// Must call gpio_init / ssp_init for the LCD bus before calling this.
+// Configures all SCU pin mux, GPIO directions, CPLD IO registers,
+// and sends the complete ILI9341 command sequence.  Enables backlight.
 void lcd_init();
 
 // Set the active drawing window (column/row address set).
@@ -69,3 +71,12 @@ void lcd_blit(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* pi
 inline void lcd_clear(uint16_t color565) {
     lcd_fill_rect(0, 0, LCD_WIDTH, LCD_HEIGHT, color565);
 }
+
+// Control LCD backlight via CPLD IO register (bit 7).
+void lcd_backlight(bool on);
+
+// Enter ILI9341 sleep mode (SLPIN) and turn off backlight.
+void lcd_sleep();
+
+// Wake ILI9341 from sleep (SLPOUT + DISPON) and turn on backlight.
+void lcd_wake();
