@@ -23,7 +23,7 @@
 #define configTOTAL_HEAP_SIZE                   (14 * 1024) // 14KB
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
 #define configSUPPORT_STATIC_ALLOCATION         1
-#define configAPPLICATION_ALLOCATED_HEAP        0
+#define configAPPLICATION_ALLOCATED_HEAP        1
 
 // Features
 #define configUSE_MUTEXES                       1

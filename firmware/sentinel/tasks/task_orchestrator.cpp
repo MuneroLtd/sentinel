@@ -65,6 +65,16 @@ namespace sentinel {
 } // namespace sentinel
 
 // ---------------------------------------------------------------------------
+// FreeRTOS heap — placed in AHB SRAM to free SRAM0 for task stacks/BSS.
+// configAPPLICATION_ALLOCATED_HEAP = 1 tells heap_4.c to use this extern
+// array instead of allocating its own static array in BSS.
+// ---------------------------------------------------------------------------
+extern "C" {
+    __attribute__((section(".ahbram"), aligned(8)))
+    uint8_t ucHeap[configTOTAL_HEAP_SIZE];
+}
+
+// ---------------------------------------------------------------------------
 // Static TCBs and stacks (all in BSS — no heap allocation)
 // ---------------------------------------------------------------------------
 namespace {
@@ -110,7 +120,7 @@ static StackType_t  s_timer_stack[configTIMER_TASK_STACK_DEPTH];
 // Panics (halts) if any task creation fails — that would indicate a build
 // configuration error (wrong stack size constant, etc.).
 // ---------------------------------------------------------------------------
-void sentinel_create_tasks(void)
+extern "C" void sentinel_create_tasks(void)
 {
     TaskHandle_t h;
 

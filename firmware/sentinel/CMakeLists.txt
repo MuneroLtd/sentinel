@@ -34,7 +34,7 @@ string(JOIN " " COMMON_FLAGS_STR ${COMMON_FLAGS})
 
 set(CMAKE_C_FLAGS   "${COMMON_FLAGS_STR}" CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS "${COMMON_FLAGS_STR} -std=c++17" CACHE STRING "" FORCE)
-set(CMAKE_ASM_FLAGS "${CPU_FLAGS_STR}"                CACHE STRING "" FORCE)
+set(CMAKE_ASM_FLAGS "${CPU_FLAGS_STR} -I${CMAKE_CURRENT_SOURCE_DIR}" CACHE STRING "" FORCE)
 
 # ---------------------------------------------------------------------------
 # FreeRTOS kernel
@@ -78,6 +78,7 @@ set_target_properties(fatfs PROPERTIES
 # ---------------------------------------------------------------------------
 add_executable(sentinel_m4
     # Startup / main
+    startup_m4.S
     main.cpp
 
     # HAL
@@ -97,6 +98,7 @@ add_executable(sentinel_m4
     radio/max2837.cpp
     radio/max5864.cpp
     radio/cpld.cpp
+    radio/cpld_xsvf.S
     radio/radio_ctrl.cpp
 
     # UI
