@@ -30,13 +30,6 @@
 // Forward declaration of log API (task_logger.cpp)
 extern "C" void sentinel_log(const char* tag, const char* fmt, ...);
 
-// Forward declaration of HomeDashboardApp (apps/app_home_dashboard.hpp)
-// We include it opaquely to avoid pulling in app headers from the task layer.
-namespace sentinel {
-    class HomeDashboardApp;
-}
-
-// The actual header is included only for static construction:
 #include "../apps/app_home_dashboard.hpp"
 
 // ---------------------------------------------------------------------------
@@ -51,7 +44,7 @@ namespace sentinel {
 
 // Static home dashboard instance — lives for the entire firmware lifetime.
 // Placement in BSS ensures zero-initialisation before main().
-static HomeDashboardApp g_home_dashboard_instance;
+static AppHomeDashboard g_home_dashboard_instance;
 
 // Task handle for the app task (registered by task_orchestrator.cpp).
 extern TaskHandle_t g_task_handles[];

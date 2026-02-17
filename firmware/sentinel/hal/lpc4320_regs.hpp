@@ -72,21 +72,21 @@ struct CGU_Type {
 static constexpr uint32_t CGU_BASE = 0x40050000u;
 
 // CGU register addresses (absolute)
-static constexpr volatile uint32_t* CGU_XTAL_OSC_CTRL   = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x018u);
-static constexpr volatile uint32_t* CGU_PLL1_STAT        = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x040u);
-static constexpr volatile uint32_t* CGU_PLL1_CTRL        = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x044u);
-static constexpr volatile uint32_t* CGU_IDIVA_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x048u);
-static constexpr volatile uint32_t* CGU_IDIVB_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x04Cu);
-static constexpr volatile uint32_t* CGU_IDIVC_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x050u);
-static constexpr volatile uint32_t* CGU_IDIVD_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x054u);
-static constexpr volatile uint32_t* CGU_IDIVE_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x058u);
-static constexpr volatile uint32_t* CGU_BASE_M4_CLK      = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x06Cu);
-static constexpr volatile uint32_t* CGU_BASE_APB1_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x080u);
-static constexpr volatile uint32_t* CGU_BASE_APB3_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x084u);
-static constexpr volatile uint32_t* CGU_BASE_SSP0_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x094u);
-static constexpr volatile uint32_t* CGU_BASE_SSP1_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x098u);
-static constexpr volatile uint32_t* CGU_BASE_UART0_CLK   = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x09Cu);
-static constexpr volatile uint32_t* CGU_BASE_PERIPH_CLK  = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x064u);
+static inline volatile uint32_t* CGU_XTAL_OSC_CTRL   = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x018u);
+static inline volatile uint32_t* CGU_PLL1_STAT        = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x040u);
+static inline volatile uint32_t* CGU_PLL1_CTRL        = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x044u);
+static inline volatile uint32_t* CGU_IDIVA_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x048u);
+static inline volatile uint32_t* CGU_IDIVB_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x04Cu);
+static inline volatile uint32_t* CGU_IDIVC_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x050u);
+static inline volatile uint32_t* CGU_IDIVD_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x054u);
+static inline volatile uint32_t* CGU_IDIVE_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x058u);
+static inline volatile uint32_t* CGU_BASE_M4_CLK      = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x06Cu);
+static inline volatile uint32_t* CGU_BASE_APB1_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x080u);
+static inline volatile uint32_t* CGU_BASE_APB3_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x084u);
+static inline volatile uint32_t* CGU_BASE_SSP0_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x094u);
+static inline volatile uint32_t* CGU_BASE_SSP1_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x098u);
+static inline volatile uint32_t* CGU_BASE_UART0_CLK   = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x09Cu);
+static inline volatile uint32_t* CGU_BASE_PERIPH_CLK  = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x064u);
 
 // CGU_PLL1_CTRL bit fields
 static constexpr uint32_t CGU_PLL1_CTRL_PD       = (1u <<  0);  // Power down
@@ -119,24 +119,24 @@ static constexpr uint32_t CCU_CLK_AUTO    = (1u << 1);
 static constexpr uint32_t CCU_CLK_WAKEUP  = (1u << 2);
 
 // CCU1 branch registers (absolute addresses)
-static constexpr volatile uint32_t* CCU1_CLK_M4_CORE_CFG  = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x000u);
-static constexpr volatile uint32_t* CCU1_CLK_M4_BUS_CFG   = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x000u);
-static constexpr volatile uint32_t* CCU1_CLK_M4_BUS_STAT  = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x004u);
-static constexpr volatile uint32_t* CCU1_CLK_M4_GPIO_CFG  = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x030u);
-static constexpr volatile uint32_t* CCU1_CLK_M4_GPIO_STAT = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x034u);
+static inline volatile uint32_t* CCU1_CLK_M4_CORE_CFG  = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x000u);
+static inline volatile uint32_t* CCU1_CLK_M4_BUS_CFG   = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x000u);
+static inline volatile uint32_t* CCU1_CLK_M4_BUS_STAT  = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x004u);
+static inline volatile uint32_t* CCU1_CLK_M4_GPIO_CFG  = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x030u);
+static inline volatile uint32_t* CCU1_CLK_M4_GPIO_STAT = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x034u);
 
 // CCU2 branch registers (absolute addresses) — per UM10503 Table 75
-static constexpr volatile uint32_t* CCU2_CLK_APB2_SSP1_CFG  = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x200u);
-static constexpr volatile uint32_t* CCU2_CLK_APB2_SSP1_STAT = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x204u);
-static constexpr volatile uint32_t* CCU2_CLK_APB0_SSP0_CFG  = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x700u);
-static constexpr volatile uint32_t* CCU2_CLK_APB0_SSP0_STAT = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x704u);
-static constexpr volatile uint32_t* CCU2_CLK_APB2_UART1_CFG = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x100u);
-static constexpr volatile uint32_t* CCU2_CLK_APB0_UART0_CFG = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x600u);
-static constexpr volatile uint32_t* CCU2_CLK_APB0_UART0_STAT= reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x604u);
-static constexpr volatile uint32_t* CCU2_CLK_APB1_I2C1_CFG  = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x500u);
-static constexpr volatile uint32_t* CCU2_CLK_APB1_I2C1_STAT = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x504u);
-static constexpr volatile uint32_t* CCU1_CLK_APB1_I2C0_CFG  = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x208u);
-static constexpr volatile uint32_t* CCU1_CLK_APB1_I2C0_STAT = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x20Cu);
+static inline volatile uint32_t* CCU2_CLK_APB2_SSP1_CFG  = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x200u);
+static inline volatile uint32_t* CCU2_CLK_APB2_SSP1_STAT = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x204u);
+static inline volatile uint32_t* CCU2_CLK_APB0_SSP0_CFG  = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x700u);
+static inline volatile uint32_t* CCU2_CLK_APB0_SSP0_STAT = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x704u);
+static inline volatile uint32_t* CCU2_CLK_APB2_UART1_CFG = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x100u);
+static inline volatile uint32_t* CCU2_CLK_APB0_UART0_CFG = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x600u);
+static inline volatile uint32_t* CCU2_CLK_APB0_UART0_STAT= reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x604u);
+static inline volatile uint32_t* CCU2_CLK_APB1_I2C1_CFG  = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x500u);
+static inline volatile uint32_t* CCU2_CLK_APB1_I2C1_STAT = reinterpret_cast<volatile uint32_t*>(CCU2_BASE + 0x504u);
+static inline volatile uint32_t* CCU1_CLK_APB1_I2C0_CFG  = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x208u);
+static inline volatile uint32_t* CCU1_CLK_APB1_I2C0_STAT = reinterpret_cast<volatile uint32_t*>(CCU1_BASE + 0x20Cu);
 
 // ---------------------------------------------------------------------------
 // SCU — System Control Unit for pin muxing  (UM10503 §16)
@@ -349,16 +349,16 @@ struct CREG_Type {
 };
 // For clarity, use absolute addresses based on UM10503 Table 10
 static constexpr uint32_t CREG_BASE          = 0x40043000u;
-static constexpr volatile uint32_t* CREG_M0APPMEMMAP  = reinterpret_cast<volatile uint32_t*>(CREG_BASE + 0x100u);
-static constexpr volatile uint32_t* CREG_M0APPRSTCTL  = reinterpret_cast<volatile uint32_t*>(CREG_BASE + 0x104u);  // M0APP reset control
-static constexpr volatile uint32_t* CREG_M0TXEVENT    = reinterpret_cast<volatile uint32_t*>(CREG_BASE + 0x01C4u); // per ipc_protocol.hpp
+static inline volatile uint32_t* CREG_M0APPMEMMAP  = reinterpret_cast<volatile uint32_t*>(CREG_BASE + 0x100u);
+static inline volatile uint32_t* CREG_M0APPRSTCTL  = reinterpret_cast<volatile uint32_t*>(CREG_BASE + 0x104u);  // M0APP reset control
+static inline volatile uint32_t* CREG_M0TXEVENT    = reinterpret_cast<volatile uint32_t*>(CREG_BASE + 0x01C4u); // per ipc_protocol.hpp
 // Simpler alias used in main.cpp:
-static constexpr volatile uint32_t* CREG_M0SUB_RST    = reinterpret_cast<volatile uint32_t*>(CREG_BASE + 0x104u);
+static inline volatile uint32_t* CREG_M0SUB_RST    = reinterpret_cast<volatile uint32_t*>(CREG_BASE + 0x104u);
 
 // RGU — Reset Generation Unit  (UM10503 §5)
 // Used to release / assert M0APP core reset
 static constexpr uint32_t RGU_BASE  = 0x40053000u;
-static constexpr volatile uint32_t* RGU_RESET_CTRL1    = reinterpret_cast<volatile uint32_t*>(RGU_BASE + 0x104u);
+static inline volatile uint32_t* RGU_RESET_CTRL1    = reinterpret_cast<volatile uint32_t*>(RGU_BASE + 0x104u);
 static constexpr uint32_t RGU_M0APP_RST                = (1u << 24); // bit 24 of RESET_CTRL1
 
 // ---------------------------------------------------------------------------

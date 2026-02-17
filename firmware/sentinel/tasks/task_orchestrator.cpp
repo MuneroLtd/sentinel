@@ -15,6 +15,7 @@
 #include "task.h"
 
 #include "../tasks/task_ids.hpp"
+#include "../event_bus/event_types.hpp"
 #include "../hal/uart.hpp"
 
 #include <cstdint>

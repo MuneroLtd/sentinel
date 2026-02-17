@@ -112,6 +112,9 @@ static constexpr uint8_t RFFC_LE_SCU_PIN    = 7;
 static constexpr uint8_t RFFC_LE_SCU_FUNC   = 0;
 static constexpr uint8_t RFFC_LE_GPIO_PORT  = 2;
 static constexpr uint8_t RFFC_LE_GPIO_PIN   = 7;
+// Convenience aliases used by rffc5072.cpp
+static constexpr uint8_t PORT_RFFC_CS       = RFFC_LE_GPIO_PORT;
+static constexpr uint8_t PIN_RFFC_CS        = RFFC_LE_GPIO_PIN;
 
 // ===========================================================================
 // MAX2837 Transceiver — SSP1 bus, CS_XCVR
@@ -126,14 +129,22 @@ static constexpr uint8_t MAX2837_CS_SCU_PIN = 0;
 static constexpr uint8_t MAX2837_CS_SCU_FUNC= 0;
 static constexpr uint8_t MAX2837_CS_GPIO_PORT= 2;
 static constexpr uint8_t MAX2837_CS_GPIO_PIN = 0;
+// Convenience aliases used by max2837.cpp
+static constexpr uint8_t PORT_MAX2837_CS    = MAX2837_CS_GPIO_PORT;
+static constexpr uint8_t PIN_MAX2837_CS     = MAX2837_CS_GPIO_PIN;
 
-// MAX5864 ADC/DAC CS (CS_AD): P5_7 → GPIO2[7]  (shared with RFFC LE on H1/H2)
+// MAX5864 ADC/DAC — SSP1 bus (shared with MAX2837 and LCD), dedicated CS
+// CS (CS_AD): P5_7 → GPIO2[7]  (shared with RFFC LE on H1/H2)
 // H4M: uses P5_6 → GPIO2[6]
+static constexpr uint8_t MAX5864_SSP_BUS    = SSP1_BUS;
 static constexpr uint8_t MAX5864_CS_SCU_GRP = 5;
 static constexpr uint8_t MAX5864_CS_SCU_PIN = 6;
 static constexpr uint8_t MAX5864_CS_SCU_FUNC= 0;
 static constexpr uint8_t MAX5864_CS_GPIO_PORT= 2;
 static constexpr uint8_t MAX5864_CS_GPIO_PIN = 6;
+// Convenience aliases used by max5864.cpp
+static constexpr uint8_t PORT_MAX5864_CS     = MAX5864_CS_GPIO_PORT;
+static constexpr uint8_t PIN_MAX5864_CS      = MAX5864_CS_GPIO_PIN;
 
 // ===========================================================================
 // I2C0 (APB1) — Si5351C clock generator + WM8731 audio codec
@@ -249,3 +260,13 @@ static constexpr uint8_t CPLD_TDO_SCU_GRP  = 1;
 static constexpr uint8_t CPLD_TDO_SCU_PIN  = 5;
 static constexpr uint8_t CPLD_TDO_GPIO_PORT= 1;
 static constexpr uint8_t CPLD_TDO_GPIO_PIN = 8;
+
+// Convenience aliases used by cpld.cpp
+static constexpr uint8_t PORT_CPLD_TMS     = CPLD_TMS_GPIO_PORT;
+static constexpr uint8_t PIN_CPLD_TMS      = CPLD_TMS_GPIO_PIN;
+static constexpr uint8_t PORT_CPLD_TCK     = CPLD_TCK_GPIO_PORT;
+static constexpr uint8_t PIN_CPLD_TCK      = CPLD_TCK_GPIO_PIN;
+static constexpr uint8_t PORT_CPLD_TDI     = CPLD_TDI_GPIO_PORT;
+static constexpr uint8_t PIN_CPLD_TDI      = CPLD_TDI_GPIO_PIN;
+static constexpr uint8_t PORT_CPLD_TDO     = CPLD_TDO_GPIO_PORT;
+static constexpr uint8_t PIN_CPLD_TDO      = CPLD_TDO_GPIO_PIN;

@@ -17,6 +17,7 @@
 #define configMAX_PRIORITIES                    8
 #define configMINIMAL_STACK_SIZE                128         // Idle task (words)
 #define configMAX_TASK_NAME_LEN                 16
+#define configUSE_16_BIT_TICKS                  0           // 32-bit tick counter
 
 // Memory
 #define configTOTAL_HEAP_SIZE                   (14 * 1024) // 14KB

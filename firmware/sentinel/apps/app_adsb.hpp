@@ -9,6 +9,7 @@
 
 #include "sentinel_app_base.hpp"
 #include "../ui/widgets.hpp"
+#include "ipc/ipc_protocol.hpp"
 #include <cstdint>
 
 namespace sentinel {

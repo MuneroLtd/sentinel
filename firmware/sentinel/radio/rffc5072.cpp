@@ -19,11 +19,6 @@
 #include "bsp/portapack_pins.hpp"
 
 // ---------------------------------------------------------------------------
-// SPI bus assignment (shared SSP0 with LCD/MAX2837; CS distinguishes devices)
-// ---------------------------------------------------------------------------
-static constexpr uint8_t RFFC_SSP_BUS = 0u; // SSP0
-
-// ---------------------------------------------------------------------------
 // RFFC5072 Register map (addresses 0x00 – 0x1E, 31 registers, 16 bits each)
 // Names follow RFFC5071 datasheet and HackRF firmware conventions.
 // ---------------------------------------------------------------------------

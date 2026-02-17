@@ -24,6 +24,7 @@
 #include "max5864.hpp"
 #include "cpld.hpp"
 #include "hal/ssp.hpp"
+#include "hal/gpio.hpp"
 #include "bsp/portapack_pins.hpp"
 
 namespace sentinel {
@@ -295,7 +296,7 @@ void set_bandwidth(uint32_t bw_hz) {
     // We use the SSP0 bus directly since max2837_write is static to max2837.cpp.
     // To avoid coupling, we use a minimal inline write here.
     gpio_cs_low(PORT_MAX2837_CS, PIN_MAX2837_CS);
-    ssp_write16(0u, (uint16_t)(((uint16_t)(2u & 0x1Fu) << 10u) | (val & 0x3FFu)));
+    ssp_write16(MAX2837_SSP_BUS, (uint16_t)(((uint16_t)(2u & 0x1Fu) << 10u) | (val & 0x3FFu)));
     gpio_cs_high(PORT_MAX2837_CS, PIN_MAX2837_CS);
 }
 

@@ -40,6 +40,8 @@
 #include "../event_bus/event_types.hpp"
 #include "../tasks/task_ids.hpp"
 
+#include <cstdio>
+
 extern "C" void sentinel_log(const char* tag, const char* fmt, ...);
 
 // ---------------------------------------------------------------------------

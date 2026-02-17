@@ -67,7 +67,7 @@ struct __attribute__((packed)) SensorDataPayload {
     uint16_t humidity_pct_x10;  // % × 10 (e.g. 560 = 56.0%)
     uint32_t pressure_pa;       // Pascals (e.g. 101300 = 1013 hPa)
     uint16_t light_lux;         // Lux (0 if not available)
-    uint8_t  pad[18];
+    uint8_t  pad[16];
 };
 static_assert(sizeof(SensorDataPayload) == 26, "Payload must be 26 bytes");
 
@@ -128,7 +128,7 @@ struct __attribute__((packed)) SystemStatusPayload {
     uint32_t uptime_s;          // Seconds since boot
     uint8_t  cpu_load_pct;      // 0-100, averaged over last tick
     uint8_t  heap_free_pct;     // FreeRTOS heap free %
-    uint8_t  pad[18];
+    uint8_t  pad[17];
 };
 static_assert(sizeof(SystemStatusPayload) == 26, "Payload must be 26 bytes");
 

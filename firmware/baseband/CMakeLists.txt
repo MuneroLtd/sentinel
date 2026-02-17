@@ -86,8 +86,12 @@ set(CMAKE_EXE_LINKER_FLAGS
 
 set(CMSIS_ROOT "${CMAKE_SOURCE_DIR}/../third_party/CMSIS_5")
 set(CMSIS_CORE_INCLUDE "${CMSIS_ROOT}/CMSIS/Core/Include")
-set(CMSIS_DSP_INCLUDE  "${CMSIS_ROOT}/CMSIS/DSP/Include")
-set(CMSIS_DSP_SOURCE   "${CMSIS_ROOT}/CMSIS/DSP/Source")
+
+# CMSIS-DSP is in its own standalone repo (split from CMSIS_5)
+set(CMSIS_DSP_ROOT     "${CMAKE_SOURCE_DIR}/../third_party/CMSIS-DSP")
+set(CMSIS_DSP_INCLUDE  "${CMSIS_DSP_ROOT}/Include")
+set(CMSIS_DSP_PRIVATE  "${CMSIS_DSP_ROOT}/PrivateInclude")
+set(CMSIS_DSP_SOURCE   "${CMSIS_DSP_ROOT}/Source")
 
 # Only compile the CMSIS-DSP modules we actually use:
 #   - arm_cfft_q15        (ComplexMathFunctions)
@@ -104,13 +108,14 @@ add_library(CMSISDSP STATIC
     ${CMSIS_DSP_SOURCE}/TransformFunctions/arm_cfft_radix4_q15.c
     ${CMSIS_DSP_SOURCE}/TransformFunctions/arm_rfft_q15.c
     ${CMSIS_DSP_SOURCE}/TransformFunctions/arm_rfft_init_q15.c
-    ${CMSIS_DSP_SOURCE}/TransformFunctions/arm_bitreversal2.S
+    ${CMSIS_DSP_SOURCE}/TransformFunctions/arm_bitreversal2.c
     # Complex math
     ${CMSIS_DSP_SOURCE}/ComplexMathFunctions/arm_cmplx_mag_q15.c
-    # Common tables (twiddle factors, bit-reversal tables, etc.)
+    # Fast math (arm_sqrt_q31 used by arm_cmplx_mag_q15)
+    ${CMSIS_DSP_SOURCE}/FastMathFunctions/arm_sqrt_q31.c
+    # Common tables (twiddle factors, bit-reversal tables — gc-sections strips unused sizes)
     ${CMSIS_DSP_SOURCE}/CommonTables/arm_common_tables.c
     ${CMSIS_DSP_SOURCE}/CommonTables/arm_const_structs.c
-    ${CMSIS_DSP_SOURCE}/CommonTables/arm_const_structs_f16.c
 )
 
 target_compile_definitions(CMSISDSP PUBLIC
@@ -123,6 +128,7 @@ target_compile_definitions(CMSISDSP PUBLIC
 target_include_directories(CMSISDSP PUBLIC
     ${CMSIS_CORE_INCLUDE}
     ${CMSIS_DSP_INCLUDE}
+    ${CMSIS_DSP_PRIVATE}
 )
 
 target_compile_options(CMSISDSP PRIVATE ${CPU_FLAGS} -O2 -ffunction-sections -fdata-sections -nostdlib)
@@ -133,6 +139,7 @@ target_compile_options(CMSISDSP PRIVATE ${CPU_FLAGS} -O2 -ffunction-sections -fd
 
 add_executable(baseband
     m0_vectors.cpp
+    libc_stubs.c
     main_m0.cpp
     dsp/fm_demod.cpp
     dsp/spectrum.cpp
@@ -148,7 +155,14 @@ target_include_directories(baseband PRIVATE
     ${CMSIS_DSP_INCLUDE}
 )
 
-target_link_libraries(baseband PRIVATE CMSISDSP)
+# Link CMSIS-DSP and libgcc (for __aeabi_idiv, __aeabi_lmul, etc. — Cortex-M0 has no HW divide)
+# Use the compiler to find the correct multilib libgcc for our CPU flags.
+execute_process(
+    COMMAND ${CMAKE_C_COMPILER} ${CPU_FLAGS} -print-libgcc-file-name
+    OUTPUT_VARIABLE LIBGCC_PATH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+target_link_libraries(baseband PRIVATE CMSISDSP ${LIBGCC_PATH})
 
 # Depend on the linker script so re-link happens if it changes
 set_target_properties(baseband PROPERTIES

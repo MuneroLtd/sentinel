@@ -15,11 +15,6 @@
 #include "bsp/portapack_pins.hpp"
 
 // ---------------------------------------------------------------------------
-// SPI bus assignment (SSP0, shared with RFFC5072/MAX2837; CS distinguishes)
-// ---------------------------------------------------------------------------
-static constexpr uint8_t MAX5864_SSP_BUS = 0u; // SSP0
-
-// ---------------------------------------------------------------------------
 // Mode byte constants (MAX5864 datasheet Table 3)
 // ---------------------------------------------------------------------------
 static constexpr uint8_t MAX5864_MODE_SHUTDOWN   = 0x00u;

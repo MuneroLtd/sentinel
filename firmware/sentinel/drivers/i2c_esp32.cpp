@@ -47,7 +47,7 @@ struct __attribute__((packed)) GpsResponse {
     uint16_t heading_u16;   // degrees × 10
     uint8_t  sats_u8;
     uint8_t  fix_u8;        // 0 = no fix
-    uint8_t  pad[8];
+    uint8_t  pad[10];
 };
 static_assert(sizeof(GpsResponse) == 26, "GpsResponse size mismatch");
 

@@ -6,10 +6,10 @@
  * M0 flash.  M4 loads the M0 image into SRAM at boot before releasing M0
  * from reset.
  *
- * Memory layout for M0 (LPC4320 SRAM0, 8 KB):
- *   0x10080000 ──► code + rodata + data  (6 KB maximum)
- *   0x10081800 ──► stack base  (2 KB stack grows downward from 0x10082000)
- *   0x10082000 ──► top of M0 SRAM / initial stack pointer
+ * Memory layout for M0 (LPC4320 SRAM1, 32 KB):
+ *   0x10080000 ──► code + rodata + data
+ *   stack grows downward from 0x10088000
+ *   0x10088000 ──► top of M0 SRAM / initial stack pointer
  *
  * The shared IPC memory lives at 0x10088000 (SRAM1 upper 8 KB) and is NOT
  * part of this linker script — it is accessed by address via the ipc_protocol.hpp
@@ -23,8 +23,8 @@
  * We put the 8 KB DMA buffers there, keeping M0 SRAM for code and stack.
  *
  * Final layout:
- *   0x10080000  M0_SRAM (8 KB): vector table, code, rodata, .data, .bss (non-DMA)
- *   0x10082000  top of stack (stack = 2 KB, 0x10081800..0x10082000)
+ *   0x10080000  M0_SRAM (32 KB): vector table, code, rodata, .data, .bss (non-DMA)
+ *   0x10088000  top of stack (stack = 2 KB, 0x10087800..0x10088000)
  *   0x20000000  ETB_SRAM (16 KB): DMA buffers (8 KB), free remainder
  */
 
@@ -34,8 +34,8 @@
 
 MEMORY
 {
-    /* M0 SRAM: code + data + stack */
-    M0_SRAM  (rwx) : ORIGIN = 0x10080000, LENGTH = 8K
+    /* M0 SRAM (SRAM1): code + data + stack — 32 KB available before shared IPC at 0x10088000 */
+    M0_SRAM  (rwx) : ORIGIN = 0x10080000, LENGTH = 32K
 
     /* LPC4320 ETB SRAM: for large DMA buffers (accessed by M0 and GPDMA) */
     ETB_SRAM (rw)  : ORIGIN = 0x20000000, LENGTH = 16K
@@ -170,11 +170,11 @@ SECTIONS
      * Sanity check: ensure we have not overflowed M0 SRAM.
      * Stack top must equal M0_SRAM end (0x10082000).
      * ----------------------------------------------------------------------- */
-    ASSERT(_stack_top <= 0x10082000,
-           "ERROR: M0 code + data + stack exceeds 8 KB SRAM!")
+    ASSERT(_stack_top <= 0x10088000,
+           "ERROR: M0 code + data + stack exceeds 32 KB SRAM!")
 
-    ASSERT(SIZEOF(.text) + SIZEOF(.data) + SIZEOF(.bss) <= 6144,
-           "ERROR: M0 code + data exceeds 6 KB (leaving too little for stack!)")
+    ASSERT(SIZEOF(.text) + SIZEOF(.data) + SIZEOF(.bss) <= 30720,
+           "ERROR: M0 code + data exceeds 30 KB (leaving too little for stack!)")
 }
 
 /* Provide symbols expected by minimal CRT / startup (if used) */
