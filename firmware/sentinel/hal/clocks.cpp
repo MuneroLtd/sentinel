@@ -26,26 +26,20 @@ static constexpr uint32_t IRC_FREQ_HZ  = 12000000u;
 static constexpr uint32_t CPU_FREQ_HZ  = 204000000u;
 static constexpr uint32_t PCLK_FREQ_HZ = CPU_FREQ_HZ / 2u;  // peripheral APB divider = 2
 
-// PLL1 CTRL value for 204 MHz direct mode:
-//   DIRECT = 1 (bypass output divider)
-//   FBSEL  = 1 (feedback from output, not from output divider)
-//   MSEL   = 16 → bits [31:24] = 0x10
-//   PSEL   = 0  → bits [13:12] = 0 (P=1, only matters if DIRECT=0)
-//   NSEL   = 0  → bits [23:22] = 0 (N=1 pre-divider)
-//   CLK SRC = IRC = 0x01 → bits [28:24] in BASE_CLK, not in CTRL (src lives in BASE_CLK)
-//
-// PLL1_CTRL:
-//   [0]    PD     = 0  (powered up)
-//   [1]    BYPASS = 0  (output is PLL)
-//   [6]    FBSEL  = 1
-//   [7]    DIRECT = 1
-//   [13:12] PSEL  = 0
-//   [23:22] NSEL  = 0
-//   [31:24] MSEL  = 16 (0x10)
+// PLL1 CTRL value for 204 MHz direct mode (UM10503 Table 147):
+//   CLK_SEL [28:24] = 0x01 (IRC 12 MHz input)
+//   MSEL    [23:16] = 16   → M = 17 → Fout = 12 * 17 = 204 MHz
+//   NSEL    [13:12] = 0    → N = 1 (no pre-divider)
+//   PSEL    [9:8]   = 0    → P = 1 (irrelevant when DIRECT=1)
+//   DIRECT  [7]     = 1    (bypass output divider)
+//   FBSEL   [6]     = 1    (feedback from PLL output)
+//   BYPASS  [1]     = 0    (output = PLL, not passthrough)
+//   PD      [0]     = 0    (powered up)
 static constexpr uint32_t PLL1_CTRL_204MHZ =
-    CGU_PLL1_CTRL_FBSEL |   // bit 6
+    CGU_PLL1_CTRL_FBSEL  |  // bit 6
     CGU_PLL1_CTRL_DIRECT |  // bit 7
-    (0x10u << 24);           // MSEL = 16
+    (16u << 16)           |  // MSEL = 16 at bits [23:16]
+    CGU_CLK_SRC_IRC;         // CLK_SEL = IRC at bits [28:24]
 
 // ---------------------------------------------------------------------------
 // Simple busy-wait loop (~1 µs per iteration at slow clocks — generous enough)
@@ -84,16 +78,21 @@ void clocks_init() {
         }
     }
 
-    // -------- Step 4: Switch BASE_M4_CLK to PLL1 ----------------------------
+    // -------- Step 4: Configure SPIFI clock BEFORE switching M4 to PLL1 -----
+    // We execute from SPIFI flash (XIP). The boot ROM left SPIFI on IRC.
+    // Set up IDIVB = PLL1 / 2 = 102 MHz, then source SPIFI from IDIVB.
+    // This keeps SPIFI at a safe speed for the W25Q80BV (max 104 MHz).
+    *CGU_IDIVB_CTRL = CGU_BASE_CLK_AUTOBLOCK | (0x1u << 2) | CGU_CLK_SRC_PLL1;
+    busy_wait(100);
+    *CGU_BASE_SPIFI_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_IDIVB;
+    busy_wait(100);
+
+    // -------- Step 5: Switch BASE_M4_CLK to PLL1 ----------------------------
     // AUTOBLOCK ensures glitch-free transition.
     *CGU_BASE_M4_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
     busy_wait(100);
 
-    // -------- Step 5: Set up BASE_PERIPH_CLK (for peripheral clocking) ------
-    // Use PLL1 divided by IDIVB = 2 → 102 MHz for peripheral base.
-    // IDIVB_CTRL: source = PLL1, divisor = 2-1 = 1 (bits [5:2])
-    *CGU_IDIVB_CTRL = CGU_BASE_CLK_AUTOBLOCK | (0x1u << 2) | CGU_CLK_SRC_PLL1;
-
+    // -------- Step 6: Set up peripheral base clocks ----------------------------
     // APB1 and APB3 clocked from PLL1 directly (many peripherals have internal /2)
     *CGU_BASE_APB1_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
     *CGU_BASE_APB3_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
@@ -105,7 +104,7 @@ void clocks_init() {
     // UART0 clock — from PLL1
     *CGU_BASE_UART0_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
 
-    // -------- Step 6: Enable CCU branch clocks -------------------------------
+    // -------- Step 7: Enable CCU branch clocks -------------------------------
     // Each branch: set RUN | AUTO bits so the clock is always running.
 
     // GPIO (CCU1)
@@ -126,7 +125,7 @@ void clocks_init() {
     // I2C1 (CCU2 APB1)
     *CCU2_CLK_APB1_I2C1_CFG = CCU_CLK_RUN | CCU_CLK_AUTO;
 
-    // -------- Step 7: SGPIO peripheral clock (for baseband IQ capture) --------
+    // -------- Step 8: SGPIO peripheral clock (for baseband IQ capture) --------
     // BASE_PERIPH_CLK drives SGPIO — source from PLL1 (204 MHz)
     *CGU_BASE_PERIPH_CLK = CGU_BASE_CLK_AUTOBLOCK | CGU_CLK_SRC_PLL1;
 

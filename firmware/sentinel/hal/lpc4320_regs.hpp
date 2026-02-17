@@ -81,6 +81,7 @@ static inline volatile uint32_t* CGU_IDIVC_CTRL       = reinterpret_cast<volatil
 static inline volatile uint32_t* CGU_IDIVD_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x054u);
 static inline volatile uint32_t* CGU_IDIVE_CTRL       = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x058u);
 static inline volatile uint32_t* CGU_BASE_M4_CLK      = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x06Cu);
+static inline volatile uint32_t* CGU_BASE_SPIFI_CLK   = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x070u);
 static inline volatile uint32_t* CGU_BASE_APB1_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x080u);
 static inline volatile uint32_t* CGU_BASE_APB3_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x084u);
 static inline volatile uint32_t* CGU_BASE_SSP0_CLK    = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x094u);
@@ -88,13 +89,16 @@ static inline volatile uint32_t* CGU_BASE_SSP1_CLK    = reinterpret_cast<volatil
 static inline volatile uint32_t* CGU_BASE_UART0_CLK   = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x09Cu);
 static inline volatile uint32_t* CGU_BASE_PERIPH_CLK  = reinterpret_cast<volatile uint32_t*>(CGU_BASE + 0x064u);
 
-// CGU_PLL1_CTRL bit fields
+// CGU_PLL1_CTRL bit fields (UM10503 Table 147)
 static constexpr uint32_t CGU_PLL1_CTRL_PD       = (1u <<  0);  // Power down
 static constexpr uint32_t CGU_PLL1_CTRL_BYPASS   = (1u <<  1);  // Bypass (output = input)
 static constexpr uint32_t CGU_PLL1_CTRL_FBSEL    = (1u <<  6);  // Feedback select
 static constexpr uint32_t CGU_PLL1_CTRL_DIRECT   = (1u <<  7);  // Direct output (bypass output divider)
-static constexpr uint32_t CGU_PLL1_CTRL_CLKEN    = (1u << 11);  // Block clock output
-// PSEL [13:12], NSEL [23:22], MSEL [31:24]
+// Bits [9:8]   = PSEL  (post-divider, 2-bit: P = 2^PSEL)
+// Bit  11      = AUTOBLOCK
+// Bits [13:12] = NSEL  (pre-divider, 2-bit: N = NSEL+1)
+// Bits [23:16] = MSEL  (feedback divider, 8-bit: M = MSEL+1)
+// Bits [28:24] = CLK_SEL (input clock source — same encoding as BASE_CLK)
 static constexpr uint32_t CGU_PLL1_STAT_LOCK     = (1u <<  0);  // PLL locked
 
 // CGU BASE_CLK: bits [28:24] = clock source
@@ -104,6 +108,7 @@ static constexpr uint32_t CGU_BASE_CLK_AUTOBLOCK = (1u << 11);  // Auto-block du
 static constexpr uint32_t CGU_CLK_SRC_IRC        = (0x01u << 24); // 12 MHz IRC
 static constexpr uint32_t CGU_CLK_SRC_XTAL       = (0x06u << 24); // Crystal osc
 static constexpr uint32_t CGU_CLK_SRC_PLL1       = (0x09u << 24); // PLL1 output
+static constexpr uint32_t CGU_CLK_SRC_IDIVB      = (0x0Du << 24); // Integer divider B output
 
 // ---------------------------------------------------------------------------
 // CCU — Clock Control Unit  (UM10503 §13)
