@@ -139,10 +139,22 @@ Reset_Handler:
     movs    r7, #0
     str     r7, [r6]
 
-    /* GPIO2 DIR: set bit 1 as output */
+    /* --- Set up LED2: P4_2 = GPIO2[2] --- */
+    /* SCU P4_2 at 0x40086208: func 0 (GPIO), no pull */
+    ldr     r6, =0x40086208
+    movs    r7, #0
+    str     r7, [r6]
+
+    /* --- Set up LED3: P6_12 = GPIO2[8] --- */
+    /* SCU P6_12 at 0x40086630: func 0 (GPIO), no pull */
+    ldr     r6, =0x40086630
+    movs    r7, #0
+    str     r7, [r6]
+
+    /* GPIO2 DIR: set bits 1, 2, 8 as outputs (LED1, LED2, LED3) */
     ldr     r6, =0x400F6008     /* GPIO_PORT_BASE + 0x2000 + 2*4 */
     ldr     r7, [r6]
-    orr     r7, r7, #2          /* bit 1 */
+    orr     r7, r7, #0x106      /* bits 1, 2, 8 */
     str     r7, [r6]
 
     /* --- Stage 0: blink 1 time — we're alive --- */
@@ -200,8 +212,18 @@ Reset_Handler:
     bl      .Ldiag_blink
 
     /* ---- 3. C++ static constructors ---- */
+    /* Unrolled with LED2/LED3 indicators per init_array entry.     */
+    /*                                                               */
+    /*   LED2 ON  → about to call init_array[0] (AppHomeDashboard)  */
+    /*   LED3 ON  → init_array[0] done, about to call [1] (5 apps) */
+    /*   LED2 OFF → init_array[1] done, all constructors complete   */
+    /*                                                               */
+    /* If crash occurs:                                              */
+    /*   LED2 ON, LED3 OFF → crash in init_array[0]                 */
+    /*   LED2 ON, LED3 ON  → crash in init_array[1]                 */
+    /*   LED2 OFF          → both OK                                */
 .Lcall_init:
-    /* .preinit_array */
+    /* .preinit_array (expected empty) */
     ldr     r4, =__preinit_array_start
     ldr     r5, =__preinit_array_end
 .Lpreinit_loop:
@@ -211,17 +233,47 @@ Reset_Handler:
     blx     r0
     b       .Lpreinit_loop
 
-    /* .init_array */
+    /* .init_array — unrolled with LED indicators */
 .Linit_array:
     ldr     r4, =__init_array_start
     ldr     r5, =__init_array_end
-.Linit_loop:
+
+    /* --- LED2 ON: about to call first entry --- */
+    ldr     r6, =0x400F6208     /* GPIO2 SET */
+    movs    r7, #4              /* bit 2 = GPIO2[2] = LED2 */
+    str     r7, [r6]
+
+    /* Call init_array[0] if it exists */
     cmp     r4, r5
     bge     .Linit_done
     ldr     r0, [r4], #4
     blx     r0
-    b       .Linit_loop
+
+    /* --- LED3 ON: first entry done, about to call second --- */
+    ldr     r6, =0x400F6208     /* GPIO2 SET */
+    movs    r7, #0              /* bit 8 = GPIO2[8] = LED3 */
+    orr     r7, r7, #(1 << 8)
+    str     r7, [r6]
+
+    /* Call init_array[1] if it exists */
+    cmp     r4, r5
+    bge     .Linit_done
+    ldr     r0, [r4], #4
+    blx     r0
+
+    /* Handle any remaining entries (unlikely) */
+.Linit_remain:
+    cmp     r4, r5
+    bge     .Linit_done
+    ldr     r0, [r4], #4
+    blx     r0
+    b       .Linit_remain
+
 .Linit_done:
+    /* --- LED2 OFF: all constructors done --- */
+    ldr     r6, =0x400F6288     /* GPIO2 CLR */
+    movs    r7, #4              /* LED2 off */
+    str     r7, [r6]
 
     /* --- Stage 4: blink 5 times — init_array complete --- */
     movs    r0, #5
