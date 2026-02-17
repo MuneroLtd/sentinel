@@ -243,168 +243,225 @@ extern "C" void sentinel_main() {
     // -------------------------------------------------------------------------
     uart_puts("[SENTINEL] Initialising LCD (UART will stop after this)...\r\n");
 
-    // === CPLD JTAG IDCODE DIAGNOSTIC ===
-    // Read the PortaPack CPLD's JTAG IDCODE to verify it's alive.
-    // PortaPack CPLD JTAG pins (from Mayhem portapack_hal.hpp):
-    //   TMS: GPIO1[1]  (P1_8, SCU func 0)
-    //   TDO: GPIO1[8]  (P1_5, SCU func 0)
-    //   TCK: GPIO3[0]  (P6_1, SCU func 0)
-    //   TDI: GPIO3[1]  (P6_2, SCU func 0)
+    // === BARE-MINIMUM LCD TEST ===
+    // Skip the full lcd_init(). Instead, manually configure pins and
+    // send ONLY the absolute minimum commands to the ILI9341.
+    // This isolates whether the issue is init parameters or the bus itself.
     {
-        // Configure JTAG pins
-        scu_set_pinmode(1, 8, 0, (1u << 4) | (1u << 6));  // TMS P1_8 GPIO
-        scu_set_pinmode(1, 5, 0, (1u << 4) | (1u << 6));  // TDO P1_5 GPIO
-        scu_set_pinmode(6, 1, 0, (1u << 4) | (1u << 6));  // TCK P6_1 GPIO
-        scu_set_pinmode(6, 2, 0, (1u << 4) | (1u << 6));  // TDI P6_2 GPIO
+        static constexpr uint32_t PIN_MODE = (1u << 4) | (1u << 6); // 0x50
 
-        // TMS, TCK, TDI = outputs; TDO = input
-        gpio_set_dir(1, 1, true);   // TMS output
-        gpio_set_dir(3, 0, true);   // TCK output
-        gpio_set_dir(3, 1, true);   // TDI output
-        gpio_set_dir(1, 8, false);  // TDO input
+        // Configure SCU pin mux for all LCD pins
+        scu_set_pinmode(LCD_WRX_SCU_GRP, LCD_WRX_SCU_PIN, LCD_WRX_SCU_FUNC, PIN_MODE);
+        scu_set_pinmode(LCD_RDX_SCU_GRP, LCD_RDX_SCU_PIN, LCD_RDX_SCU_FUNC, PIN_MODE);
+        scu_set_pinmode(LCD_ADDR_SCU_GRP, LCD_ADDR_SCU_PIN, LCD_ADDR_SCU_FUNC, PIN_MODE);
+        scu_set_pinmode(LCD_DIR_SCU_GRP, LCD_DIR_SCU_PIN, LCD_DIR_SCU_FUNC, PIN_MODE);
+        scu_set_pinmode(LCD_STBX_SCU_GRP, LCD_STBX_SCU_PIN, LCD_STBX_SCU_FUNC, PIN_MODE);
+        scu_set_pinmode(LCD_TE_SCU_GRP, LCD_TE_SCU_PIN, LCD_TE_SCU_FUNC, PIN_MODE);
+        for (uint8_t p = 0; p < 8; p++)
+            scu_set_pinmode(LCD_D0_SCU_GRP, p, LCD_DATA_SCU_FUNC, PIN_MODE);
 
-        // Initial states
-        gpio_write(3, 0, 0);  // TCK low
-        gpio_write(3, 1, 0);  // TDI low
-        gpio_write(1, 1, 1);  // TMS high
+        // Set GPIO MASK for data bus port
+        LPC_GPIO->MASK[LCD_DATA_GPIO_PORT] = ~LCD_DATA_MASK;
 
-        // Helper lambdas for JTAG bit-bang
-        auto jtag_clock = [](bool tms, bool tdi) -> bool {
-            gpio_write(1, 1, tms);
-            gpio_write(3, 1, tdi);
-            for (volatile int d = 0; d < 10; d++) { __asm volatile("nop"); }
-            gpio_write(3, 0, 1);  // TCK rising edge
-            for (volatile int d = 0; d < 10; d++) { __asm volatile("nop"); }
-            bool tdo = gpio_read(1, 8);
-            gpio_write(3, 0, 0);  // TCK falling edge
-            for (volatile int d = 0; d < 10; d++) { __asm volatile("nop"); }
-            return tdo;
+        // Preload safe output values BEFORE setting directions
+        LPC_GPIO->MPIN[LCD_DATA_GPIO_PORT] = 0;              // data bus = 0
+        LPC_GPIO->SET[LCD_RDX_GPIO_PORT] = (1u << LCD_RDX_GPIO_PIN);   // RDX high
+        LPC_GPIO->SET[LCD_WRX_GPIO_PORT] = (1u << LCD_WRX_GPIO_PIN);   // WRX high
+        LPC_GPIO->SET[LCD_STBX_GPIO_PORT] = (1u << LCD_STBX_GPIO_PIN); // IO_STB high
+        LPC_GPIO->CLR[LCD_ADDR_GPIO_PORT] = (1u << LCD_ADDR_GPIO_PIN); // ADDR low
+        // DIR: start in read mode (DIR=1, bus=inputs)
+        LPC_GPIO->DIR[LCD_DATA_GPIO_PORT] &= ~LCD_DATA_MASK;
+        LPC_GPIO->SET[LCD_DIR_GPIO_PORT] = (1u << LCD_DIR_GPIO_PIN);
+
+        // Now set control pins as outputs
+        gpio_set_dir(LCD_DIR_GPIO_PORT, LCD_DIR_GPIO_PIN, true);
+        gpio_set_dir(LCD_RDX_GPIO_PORT, LCD_RDX_GPIO_PIN, true);
+        gpio_set_dir(LCD_WRX_GPIO_PORT, LCD_WRX_GPIO_PIN, true);
+        gpio_set_dir(LCD_STBX_GPIO_PORT, LCD_STBX_GPIO_PIN, true);
+        gpio_set_dir(LCD_ADDR_GPIO_PORT, LCD_ADDR_GPIO_PIN, true);
+
+        // --- Verify all signals with readback ---
+        bool all_ok = true;
+        auto delay_short = []() {
+            for (volatile int d = 0; d < 200; d++) { __asm volatile("nop"); }
         };
 
-        // TAP Reset: 8 clocks with TMS=1
-        for (int i = 0; i < 8; i++) jtag_clock(1, 0);
+        // Test WRX toggle
+        LPC_GPIO->CLR[1] = (1u << 10); delay_short();
+        if (LPC_GPIO->PIN[1] & (1u << 10)) all_ok = false;  // should be LOW
+        LPC_GPIO->SET[1] = (1u << 10); delay_short();
+        if (!(LPC_GPIO->PIN[1] & (1u << 10))) all_ok = false; // should be HIGH
 
-        // Go to Run-Test/Idle: TMS=0
-        jtag_clock(0, 0);
+        // Test DIR toggle
+        LPC_GPIO->CLR[1] = (1u << 13); delay_short();
+        if (LPC_GPIO->PIN[1] & (1u << 13)) all_ok = false;
+        LPC_GPIO->SET[1] = (1u << 13); delay_short();
+        if (!(LPC_GPIO->PIN[1] & (1u << 13))) all_ok = false;
 
-        // Navigate to Shift-IR: TMS=1,1,0,0
-        jtag_clock(1, 0);  // Select-DR
-        jtag_clock(1, 0);  // Select-IR
-        jtag_clock(0, 0);  // Capture-IR
-        jtag_clock(0, 0);  // Shift-IR
+        // Test ADDR toggle
+        LPC_GPIO->SET[5] = (1u << 1); delay_short();
+        if (!(LPC_GPIO->PIN[5] & (1u << 1))) all_ok = false;
+        LPC_GPIO->CLR[5] = (1u << 1); delay_short();
+        if (LPC_GPIO->PIN[5] & (1u << 1)) all_ok = false;
 
-        // Shift in IDCODE instruction (0x006, 10 bits, LSB first)
-        // 0x006 = 0b0000000110
-        uint32_t ir_val = 0x006;
-        for (int i = 0; i < 10; i++) {
-            bool last = (i == 9);
-            jtag_clock(last, ir_val & 1);  // TMS=1 on last bit (Exit1-IR)
-            ir_val >>= 1;
+        // Test IO_STBX toggle
+        LPC_GPIO->CLR[5] = (1u << 0); delay_short();
+        if (LPC_GPIO->PIN[5] & (1u << 0)) all_ok = false;
+        LPC_GPIO->SET[5] = (1u << 0); delay_short();
+        if (!(LPC_GPIO->PIN[5] & (1u << 0))) all_ok = false;
+
+        // Test data bus: write 0xAA, read back
+        LPC_GPIO->CLR[1] = (1u << 13);           // DIR = write
+        LPC_GPIO->DIR[3] |= LCD_DATA_MASK;        // data bus = outputs
+        LPC_GPIO->MPIN[3] = 0xAA00u;              // write 0xAA to bus
+        delay_short();
+        uint32_t bus_read = (LPC_GPIO->PIN[3] >> 8) & 0xFF;
+        if (bus_read != 0xAA) all_ok = false;
+        LPC_GPIO->MPIN[3] = 0x5500u;              // write 0x55
+        delay_short();
+        bus_read = (LPC_GPIO->PIN[3] >> 8) & 0xFF;
+        if (bus_read != 0x55) all_ok = false;
+
+        // Restore safe state
+        LPC_GPIO->MPIN[3] = 0;
+        LPC_GPIO->DIR[3] &= ~LCD_DATA_MASK;       // data bus = inputs
+        LPC_GPIO->SET[1] = (1u << 13);            // DIR = read
+
+        uart_printf("[SENTINEL] GPIO pin test: %s\r\n", all_ok ? "ALL PASS" : "FAIL");
+
+        // Report: LED1 2x fast = all pass, LED3 2x = fail
+        for (int i = 0; i < 2; i++) {
+            gpio_write(all_ok ? LED1_GPIO_PORT : LED3_GPIO_PORT,
+                        all_ok ? LED1_GPIO_PIN : LED3_GPIO_PIN, true);
+            for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
+            gpio_write(all_ok ? LED1_GPIO_PORT : LED3_GPIO_PORT,
+                        all_ok ? LED1_GPIO_PIN : LED3_GPIO_PIN, false);
+            for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
         }
 
-        // Update-IR: TMS=1
-        jtag_clock(1, 0);
+        // --- Helper: write CPLD IO register ---
+        auto cpld_io_write = [&](uint8_t val) {
+            LPC_GPIO->MPIN[3] = static_cast<uint32_t>(val) << 8;  // data on bus
+            LPC_GPIO->CLR[1] = (1u << 13);          // DIR = write
+            LPC_GPIO->DIR[3] |= LCD_DATA_MASK;       // bus = outputs
+            LPC_GPIO->SET[5] = (1u << 1);            // ADDR = 1 (IO reg)
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+            LPC_GPIO->CLR[5] = (1u << 0);            // IO_STB low
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+            LPC_GPIO->SET[5] = (1u << 0);            // IO_STB high (rising edge latches)
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+        };
 
-        // Run-Test/Idle: TMS=0
-        jtag_clock(0, 0);
+        // --- Helper: send LCD command byte via WRX ---
+        auto lcd_cmd = [&](uint8_t cmd) {
+            LPC_GPIO->MPIN[3] = 0;                    // high byte = 0
+            LPC_GPIO->CLR[1] = (1u << 13);            // DIR = write
+            LPC_GPIO->DIR[3] |= LCD_DATA_MASK;         // bus = outputs
+            LPC_GPIO->CLR[5] = (1u << 1);             // ADDR = 0 (command)
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+            LPC_GPIO->CLR[1] = (1u << 10);            // WRX low (CPLD latches high byte)
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+            LPC_GPIO->MPIN[3] = static_cast<uint32_t>(cmd) << 8; // low byte = cmd
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+            LPC_GPIO->SET[1] = (1u << 10);            // WRX high (CPLD passes low byte)
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+            LPC_GPIO->SET[5] = (1u << 1);             // ADDR = 1 (ready for data)
+        };
 
-        // Navigate to Shift-DR: TMS=1,0,0
-        jtag_clock(1, 0);  // Select-DR
-        jtag_clock(0, 0);  // Capture-DR
-        jtag_clock(0, 0);  // Shift-DR
+        // --- Helper: send LCD 16-bit data via WRX ---
+        auto lcd_dat = [&](uint16_t val) {
+            LPC_GPIO->MPIN[3] = val;                   // high byte in bits [15:8]
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+            LPC_GPIO->CLR[1] = (1u << 10);            // WRX low
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+            LPC_GPIO->MPIN[3] = static_cast<uint32_t>(val) << 8; // low byte
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+            LPC_GPIO->SET[1] = (1u << 10);            // WRX high
+            for (volatile int d = 0; d < 100; d++) __asm volatile("nop");
+        };
 
-        // Shift out 32 bits of IDCODE (LSB first)
-        uint32_t idcode = 0;
-        for (int i = 0; i < 32; i++) {
-            bool last = (i == 31);
-            bool tdo = jtag_clock(last, 0);  // TMS=1 on last bit
-            if (tdo) idcode |= (1u << i);
-        }
+        // --- Helper: send 8-bit parameter (as 16-bit with high=0) ---
+        auto lcd_param = [&](uint8_t val) {
+            lcd_dat(static_cast<uint16_t>(val));
+        };
 
-        // Update-DR → Run-Test/Idle
-        jtag_clock(1, 0);
-        jtag_clock(0, 0);
+        // --- CPLD reset sequence ---
+        uart_puts("[SENTINEL] CPLD reset...\r\n");
+        cpld_io_write(0x02);  // deassert LCD reset
+        for (volatile uint32_t d = 0; d < 200000; d++) __asm volatile("nop");
+        cpld_io_write(0x03);  // assert LCD reset
+        for (volatile uint32_t d = 0; d < 2000000; d++) __asm volatile("nop"); // 10ms
+        cpld_io_write(0x02);  // deassert LCD reset
+        for (volatile uint32_t d = 0; d < 25000000; d++) __asm volatile("nop"); // ~120ms
 
-        // Release JTAG pins back to inputs
-        gpio_set_dir(1, 1, false);
-        gpio_set_dir(3, 0, false);
-        gpio_set_dir(3, 1, false);
+        // --- Backlight ON (confirm CPLD IO still works after reset) ---
+        cpld_io_write(0x82);  // bit 7 = backlight, bit 1 = audio reset
+        uart_puts("[SENTINEL] Backlight on\r\n");
 
-        // Report IDCODE via UART (before LCD takes over P2_0/P2_1)
-        uart_printf("[SENTINEL] CPLD JTAG IDCODE: 0x%08X\r\n", idcode);
-
-        // Blink LED pattern based on IDCODE
-        if (idcode == 0x020A50DDu) {
-            // EPM240 (MAX V) — standard PortaPack H1/H2
-            uart_puts("[SENTINEL] CPLD: EPM240 (MAX V)\r\n");
-            // 2 fast LED1 blinks
-            for (int i = 0; i < 2; i++) {
-                gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
-                for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
-                gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
-                for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
-            }
-        } else if ((idcode & 0xFFFF) == 0x10DDu || idcode == 0x00025610u) {
-            // AGM device — H4M factory programmed
-            uart_puts("[SENTINEL] CPLD: AGM (H4M)\r\n");
-            // 3 fast LED1 blinks
-            for (int i = 0; i < 3; i++) {
-                gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
-                for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
-                gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
-                for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
-            }
-        } else if (idcode == 0x00000000u || idcode == 0xFFFFFFFFu) {
-            // No response / not connected
-            uart_puts("[SENTINEL] CPLD: NO RESPONSE\r\n");
-            // LED3 blinks 5x (error)
-            for (int i = 0; i < 5; i++) {
-                gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, true);
-                for (volatile uint32_t d = 0; d < 300000; d++) { __asm volatile("nop"); }
-                gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, false);
-                for (volatile uint32_t d = 0; d < 300000; d++) { __asm volatile("nop"); }
-            }
-        } else {
-            // Unknown IDCODE — report via alternating LED1/LED3
-            uart_printf("[SENTINEL] CPLD: UNKNOWN IDCODE 0x%08X\r\n", idcode);
-            for (int i = 0; i < 4; i++) {
-                gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
-                for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
-                gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
-                gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, true);
-                for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
-                gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, false);
-            }
-        }
-
-        // 1 second pause before LCD init
-        for (volatile uint32_t d = 0; d < 5000000; d++) { __asm volatile("nop"); }
-    }
-
-    // === LCD INIT (with slow timing for diagnostic) ===
-    lcd_init();
-
-    // Blink LED1 5x to confirm lcd_init completed
-    for (int i = 0; i < 5; i++) {
+        // Blink LED1 1x to show we got here
         gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
-        for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
+        for (volatile uint32_t d = 0; d < 500000; d++) __asm volatile("nop");
         gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
-        for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
+        for (volatile uint32_t d = 0; d < 500000; d++) __asm volatile("nop");
+
+        // --- BARE MINIMUM LCD INIT ---
+        uart_puts("[SENTINEL] LCD bare init: SWRESET...\r\n");
+        lcd_cmd(0x01);  // SWRESET
+        for (volatile uint32_t d = 0; d < 25000000; d++) __asm volatile("nop"); // 120ms
+
+        lcd_cmd(0x11);  // SLPOUT
+        for (volatile uint32_t d = 0; d < 25000000; d++) __asm volatile("nop"); // 120ms
+
+        // Set pixel format to 16bpp
+        lcd_cmd(0x3A); lcd_param(0x55);
+
+        // MADCTL
+        lcd_cmd(0x36); lcd_param(0xD8);
+
+        lcd_cmd(0x29);  // DISPON
+        for (volatile uint32_t d = 0; d < 5000000; d++) __asm volatile("nop"); // 25ms
+
+        // Blink LED1 2x to show LCD init commands sent
+        for (int i = 0; i < 2; i++) {
+            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
+            for (volatile uint32_t d = 0; d < 300000; d++) __asm volatile("nop");
+            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
+            for (volatile uint32_t d = 0; d < 300000; d++) __asm volatile("nop");
+        }
+
+        // --- FILL SCREEN RED (small area first: 10x10 pixels) ---
+        // Column Address Set (CASET) for columns 0-9
+        lcd_cmd(0x2A);
+        lcd_param(0x00); lcd_param(0x00);  // start col = 0
+        lcd_param(0x00); lcd_param(0x09);  // end col = 9
+
+        // Page Address Set (PASET) for rows 0-9
+        lcd_cmd(0x2B);
+        lcd_param(0x00); lcd_param(0x00);  // start row = 0
+        lcd_param(0x00); lcd_param(0x09);  // end row = 9
+
+        // Memory Write (RAMWR) — 100 red pixels
+        lcd_cmd(0x2C);
+        for (int i = 0; i < 100; i++) {
+            lcd_dat(0xF800);  // RED in RGB565
+        }
+
+        // Blink LED1 3x to show pixel data sent
+        for (int i = 0; i < 3; i++) {
+            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
+            for (volatile uint32_t d = 0; d < 300000; d++) __asm volatile("nop");
+            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
+            for (volatile uint32_t d = 0; d < 300000; d++) __asm volatile("nop");
+        }
+
+        // --- Now try toggling backlight to prove CPLD is still alive ---
+        for (volatile uint32_t d = 0; d < 5000000; d++) __asm volatile("nop");
+        cpld_io_write(0x02);  // backlight OFF
+        for (volatile uint32_t d = 0; d < 5000000; d++) __asm volatile("nop");
+        cpld_io_write(0x82);  // backlight ON
     }
 
-    // Fill screen with RED — slow but diagnostic
-    lcd_fill_rect(0, 0, LCD_WIDTH, LCD_HEIGHT, LCD_RED);
-
-    // Blink LED1 5 more times to confirm fill completed
-    for (int i = 0; i < 5; i++) {
-        gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
-        for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
-        gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
-        for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
-    }
-
-    // Skip boot_animation for now — diagnostic mode
-    // boot_animation();
+    // Don't call lcd_init() or boot_animation — we did everything inline above
 
     // -------------------------------------------------------------------------
     // 3. SGPIO pin mux — 8 data pins + 1 clock pin for baseband IQ capture
