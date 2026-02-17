@@ -242,9 +242,66 @@ extern "C" void sentinel_main() {
     //     WARNING: UART output ceases after this point (P2_0/P2_1 reassigned).
     // -------------------------------------------------------------------------
     uart_puts("[SENTINEL] Initialising LCD (UART will stop after this)...\r\n");
+
+    // === GPIO READBACK DIAGNOSTIC ===
+    // Test WRX (GPIO1[10]) pin BEFORE lcd_init to verify GPIO works.
+    // First, manually configure just the WRX pin for GPIO output.
+    scu_set_pinmode(LCD_WRX_SCU_GRP, LCD_WRX_SCU_PIN, LCD_WRX_SCU_FUNC,
+                    (1u << 4) | (1u << 6));  // 0x50: EPUN=1, EZI=1
+    LPC_GPIO->SET[1] = (1u << 10);   // preload HIGH
+    LPC_GPIO->DIR[1] |= (1u << 10);  // output
+
+    bool wrx_ok = true;
+
+    // Test 1: should be HIGH (we just set it)
+    for (volatile int d = 0; d < 1000; d++) { __asm volatile("nop"); }
+    if (!(LPC_GPIO->PIN[1] & (1u << 10))) wrx_ok = false;
+
+    // Test 2: drive LOW
+    LPC_GPIO->CLR[1] = (1u << 10);
+    for (volatile int d = 0; d < 1000; d++) { __asm volatile("nop"); }
+    if (LPC_GPIO->PIN[1] & (1u << 10)) wrx_ok = false;
+
+    // Test 3: drive HIGH again
+    LPC_GPIO->SET[1] = (1u << 10);
+    for (volatile int d = 0; d < 1000; d++) { __asm volatile("nop"); }
+    if (!(LPC_GPIO->PIN[1] & (1u << 10))) wrx_ok = false;
+
+    // Also verify SCU register for P2_9
+    volatile uint32_t* scu_p2_9 = reinterpret_cast<volatile uint32_t*>(0x40086124u);
+    uint32_t scu_val = *scu_p2_9;
+    bool scu_ok = ((scu_val & 0x7F) == 0x50);
+
+    // Also verify DIR bit
+    bool dir_ok = (LPC_GPIO->DIR[1] & (1u << 10)) != 0;
+
+    if (wrx_ok && scu_ok && dir_ok) {
+        // GPIO1[10] WRX toggles correctly - blink LED1 3x fast (pass)
+        for (int i = 0; i < 3; i++) {
+            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
+            for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
+            gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, false);
+            for (volatile uint32_t d = 0; d < 200000; d++) { __asm volatile("nop"); }
+        }
+    } else {
+        // FAIL: blink LED3 with error code
+        // Count: 1=WRX toggle, 2=SCU config, 3=DIR bit
+        int code = !wrx_ok ? 1 : (!scu_ok ? 2 : 3);
+        for (int round = 0; round < 5; round++) {
+            for (int i = 0; i < code; i++) {
+                gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, true);
+                for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
+                gpio_write(LED3_GPIO_PORT, LED3_GPIO_PIN, false);
+                for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
+            }
+            for (volatile uint32_t d = 0; d < 1500000; d++) { __asm volatile("nop"); }
+        }
+    }
+
+    // === LCD INIT (with slow timing for diagnostic) ===
     lcd_init();
 
-    // --- Diagnostic: blink LED1 rapidly 5 times to confirm lcd_init completed ---
+    // Blink LED1 5x to confirm lcd_init completed
     for (int i = 0; i < 5; i++) {
         gpio_write(LED1_GPIO_PORT, LED1_GPIO_PIN, true);
         for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
@@ -252,7 +309,7 @@ extern "C" void sentinel_main() {
         for (volatile uint32_t d = 0; d < 500000; d++) { __asm volatile("nop"); }
     }
 
-    // --- Diagnostic: fill screen with RED to test pixel writes ---
+    // Fill screen with RED — slow but diagnostic
     lcd_fill_rect(0, 0, LCD_WIDTH, LCD_HEIGHT, LCD_RED);
 
     // Blink LED1 5 more times to confirm fill completed

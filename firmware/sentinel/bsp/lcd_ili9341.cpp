@@ -106,10 +106,11 @@ static void io_write(bool address, uint8_t value) {
     data_write_low(value);
     dir_write();
     addr(address);
-    __asm volatile("nop"); __asm volatile("nop"); __asm volatile("nop");
+    delay_us(2);
     io_stb_assert();
-    __asm volatile("nop"); __asm volatile("nop"); __asm volatile("nop");
+    delay_us(2);
     io_stb_deassert();
+    delay_us(2);
 }
 
 // ---------------------------------------------------------------------------
@@ -120,11 +121,13 @@ static void lcd_command(uint8_t cmd) {
     data_write_high(0);
     dir_write();
     addr(false);
-    __asm volatile("nop"); __asm volatile("nop"); __asm volatile("nop");
+    delay_us(2);
     lcd_wr_assert();
+    delay_us(2);
     data_write_low(cmd);
-    __asm volatile("nop"); __asm volatile("nop"); __asm volatile("nop");
+    delay_us(2);
     lcd_wr_deassert();
+    delay_us(2);
     addr(true);  // pre-set for data phase
 }
 
@@ -135,11 +138,13 @@ static void lcd_command(uint8_t cmd) {
 // ---------------------------------------------------------------------------
 static inline __attribute__((always_inline)) void lcd_write_data(uint16_t value) {
     data_write_high(value);
-    __asm volatile("nop");
+    delay_us(2);
     lcd_wr_assert();
+    delay_us(2);
     data_write_low(value);
-    __asm volatile("nop"); __asm volatile("nop"); __asm volatile("nop");
+    delay_us(2);
     lcd_wr_deassert();
+    delay_us(2);
 }
 
 // ---------------------------------------------------------------------------
@@ -392,10 +397,13 @@ void lcd_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t colo
     uint32_t count = static_cast<uint32_t>(w) * static_cast<uint32_t>(h);
     while (count--) {
         data_write_high(color565);
+        delay_us(2);
         lcd_wr_assert();
+        delay_us(2);
         data_write_low(color565);
-        __asm volatile("nop"); __asm volatile("nop"); __asm volatile("nop");
+        delay_us(2);
         lcd_wr_deassert();
+        delay_us(2);
     }
 }
 
