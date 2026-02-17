@@ -25,6 +25,9 @@
 #include "hal/sgpio.hpp"
 #include "hal/lpc4320_regs.hpp"
 #include "bsp/portapack_pins.hpp"
+#include "bsp/lcd_ili9341.hpp"
+#include "ui/font.hpp"
+#include "ui/color.hpp"
 #include "event_bus/event_bus.hpp"
 
 // FreeRTOS
@@ -58,6 +61,132 @@ static constexpr uint32_t M0_SRAM_BASE = 0x10080000u;
 // Forward declaration: task orchestrator (task_orchestrator.cpp)
 // ---------------------------------------------------------------------------
 extern "C" void sentinel_create_tasks();
+
+// ---------------------------------------------------------------------------
+// RF-themed Matrix rainfall boot animation
+// Green falling characters using radio/RF symbols and digits.
+// Runs for ~2 seconds before the main boot sequence continues.
+// ---------------------------------------------------------------------------
+static void boot_animation() {
+    using namespace sentinel::ui;
+
+    // Simple xorshift32 PRNG
+    static uint32_t rng_state = 0xDEADBEEF;
+    auto rng = [&]() -> uint32_t {
+        rng_state ^= rng_state << 13;
+        rng_state ^= rng_state >> 17;
+        rng_state ^= rng_state << 5;
+        return rng_state;
+    };
+
+    // RF-themed character set: digits, units, symbols
+    static const char rf_chars[] =
+        "0123456789"
+        "MHZGHZDBM"
+        "RFIQFFT"
+        "><|~^v"
+        "SENTINEL";
+
+    static constexpr int COLS = LCD_WIDTH / FONT_W;   // 53 columns
+    static constexpr int ROWS = LCD_HEIGHT / FONT_H;  // 30 rows
+    static constexpr int NUM_DROPS = 32;  // active falling columns
+
+    // Track position (row) and speed for each active drop
+    struct Drop {
+        uint8_t col;      // which screen column
+        int8_t  row;      // current head position (can be negative = pending)
+        uint8_t speed;    // rows per frame (1-3)
+        uint8_t trail;    // trail length (4-12)
+    };
+
+    Drop drops[NUM_DROPS];
+    for (int i = 0; i < NUM_DROPS; i++) {
+        drops[i].col   = rng() % COLS;
+        drops[i].row   = -(static_cast<int8_t>(rng() % 20));  // staggered start
+        drops[i].speed = 1 + (rng() % 3);
+        drops[i].trail = 4 + (rng() % 9);
+    }
+
+    lcd_clear(LCD_BLACK);
+
+    // Animate for ~80 frames
+    for (int frame = 0; frame < 80; frame++) {
+        for (int i = 0; i < NUM_DROPS; i++) {
+            Drop& d = drops[i];
+
+            // Draw the bright head character
+            if (d.row >= 0 && d.row < ROWS) {
+                char ch = rf_chars[rng() % (sizeof(rf_chars) - 1)];
+                font_draw_char(
+                    d.col * FONT_W, d.row * FONT_H,
+                    ch, colors::WHITE, colors::BLACK);
+            }
+
+            // Dim the previous head position to green
+            if (d.row - 1 >= 0 && d.row - 1 < ROWS) {
+                char ch = rf_chars[rng() % (sizeof(rf_chars) - 1)];
+                font_draw_char(
+                    d.col * FONT_W, (d.row - 1) * FONT_H,
+                    ch, colors::GREEN, colors::BLACK);
+            }
+
+            // Dark green for older trail
+            if (d.row - 3 >= 0 && d.row - 3 < ROWS) {
+                char ch = rf_chars[rng() % (sizeof(rf_chars) - 1)];
+                font_draw_char(
+                    d.col * FONT_W, (d.row - 3) * FONT_H,
+                    ch, colors::DARK_GREEN, colors::BLACK);
+            }
+
+            // Erase the tail
+            int tail_row = d.row - d.trail;
+            if (tail_row >= 0 && tail_row < ROWS) {
+                lcd_fill_rect(
+                    d.col * FONT_W, tail_row * FONT_H,
+                    FONT_W, FONT_H, LCD_BLACK);
+            }
+
+            // Advance
+            d.row += d.speed;
+
+            // Reset when fully off-screen
+            if (d.row - d.trail >= ROWS) {
+                d.col   = rng() % COLS;
+                d.row   = -(static_cast<int8_t>(rng() % 15));
+                d.speed = 1 + (rng() % 3);
+                d.trail = 4 + (rng() % 9);
+            }
+        }
+
+        // ~25ms per frame (busy wait, no timer yet)
+        for (volatile uint32_t d = 0; d < 500000; d++) {
+            __asm volatile("nop");
+        }
+    }
+
+    // Final screen: clear and show Sentinel branding
+    lcd_clear(LCD_BLACK);
+
+    // Centre "SENTINEL" title
+    static const char title[] = "S E N T I N E L";
+    int title_x = (LCD_WIDTH - static_cast<int>(sizeof(title) - 1) * FONT_W) / 2;
+    font_draw_str(title_x, 100, title, colors::GREEN, colors::BLACK);
+
+    // Tagline
+    static const char tagline[] = "RF Awareness Platform";
+    int tag_x = (LCD_WIDTH - static_cast<int>(sizeof(tagline) - 1) * FONT_W) / 2;
+    font_draw_str(tag_x, 120, tagline, colors::DARK_GREEN, colors::BLACK);
+
+    // Version
+    static const char ver[] = "v0.1.3";
+    int ver_x = (LCD_WIDTH - static_cast<int>(sizeof(ver) - 1) * FONT_W) / 2;
+    font_draw_str(ver_x, 140, ver, colors::GREY, colors::BLACK);
+
+    // Hold branding for 1 second
+    for (volatile uint32_t d = 0; d < 10000000; d++) {
+        __asm volatile("nop");
+    }
+}
 
 // ---------------------------------------------------------------------------
 // sentinel_main — called by startup code as the C entry point
@@ -112,6 +241,16 @@ extern "C" void sentinel_main() {
 
     uart_puts("\r\n[SENTINEL] Boot\r\n");
     uart_printf("[SENTINEL] Core clock: %u Hz\r\n", clocks_get_cpu_hz());
+
+    // -------------------------------------------------------------------------
+    // 2b. LCD initialisation — ILI9341 via SSP1
+    //     lcd_init() handles SCU pin mux, SSP1 init, HW reset, and full
+    //     ILI9341 command sequence. Needs SSP1 clock from clocks_init().
+    // -------------------------------------------------------------------------
+    uart_puts("[SENTINEL] Initialising LCD...\r\n");
+    lcd_init();
+    uart_puts("[SENTINEL] LCD ready. Running boot animation...\r\n");
+    boot_animation();
 
     // -------------------------------------------------------------------------
     // 3. SGPIO pin mux — 8 data pins + 1 clock pin for baseband IQ capture

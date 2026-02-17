@@ -79,37 +79,41 @@ extern "C" {
 // ---------------------------------------------------------------------------
 namespace {
 
+// Task stacks placed in AHB SRAM to free SRAM0 (only 96 KB on LPC4320).
+// TCBs stay in SRAM0 (small, ~168 bytes each).
+#define AHBRAM_STACK __attribute__((section(".ahbram"), aligned(8)))
+
 // KNOWLEDGE_BASE — priority 1, 512 words
 static StaticTask_t s_kb_tcb;
-static StackType_t  s_kb_stack[sentinel::TaskStackWords::KNOWLEDGE_BASE];
+AHBRAM_STACK static StackType_t s_kb_stack[sentinel::TaskStackWords::KNOWLEDGE_BASE];
 
 // UI_RENDERER / APP_TASK — priority 3, 1024 words
 static StaticTask_t s_app_tcb;
-static StackType_t  s_app_stack[sentinel::TaskStackWords::APP_TASK];
+AHBRAM_STACK static StackType_t s_app_stack[sentinel::TaskStackWords::APP_TASK];
 
 // BG_SCANNER — priority 3, 512 words
 static StaticTask_t s_scan_tcb;
-static StackType_t  s_scan_stack[sentinel::TaskStackWords::BG_SCANNER];
+AHBRAM_STACK static StackType_t s_scan_stack[sentinel::TaskStackWords::BG_SCANNER];
 
 // ESP32_COMMS — priority 4, 768 words
 static StaticTask_t s_esp32_tcb;
-static StackType_t  s_esp32_stack[sentinel::TaskStackWords::ESP32_COMMS];
+AHBRAM_STACK static StackType_t s_esp32_stack[sentinel::TaskStackWords::ESP32_COMMS];
 
 // LOGGER — priority 4, 256 words
 static StaticTask_t s_logger_tcb;
-static StackType_t  s_logger_stack[sentinel::TaskStackWords::LOGGER];
+AHBRAM_STACK static StackType_t s_logger_stack[sentinel::TaskStackWords::LOGGER];
 
 // RADIO_MANAGER — priority 5, 512 words
 static StaticTask_t s_radio_tcb;
-static StackType_t  s_radio_stack[sentinel::TaskStackWords::RADIO_MANAGER];
+AHBRAM_STACK static StackType_t s_radio_stack[sentinel::TaskStackWords::RADIO_MANAGER];
 
 // FreeRTOS idle task — required by configSUPPORT_STATIC_ALLOCATION = 1
 static StaticTask_t s_idle_tcb;
-static StackType_t  s_idle_stack[configMINIMAL_STACK_SIZE];
+AHBRAM_STACK static StackType_t s_idle_stack[configMINIMAL_STACK_SIZE];
 
 // FreeRTOS timer daemon task — required by configUSE_TIMERS = 1
 static StaticTask_t s_timer_tcb;
-static StackType_t  s_timer_stack[configTIMER_TASK_STACK_DEPTH];
+AHBRAM_STACK static StackType_t s_timer_stack[configTIMER_TASK_STACK_DEPTH];
 
 } // anonymous namespace
 

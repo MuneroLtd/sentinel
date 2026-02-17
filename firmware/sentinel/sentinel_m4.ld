@@ -24,13 +24,16 @@ MEMORY
     /* SPI-mapped Flash (execute-in-place via SPIFI) */
     FLASH  (rx)  : ORIGIN = 0x00000000, LENGTH = 1024K
 
-    /* Cortex-M4 local SRAM0: stack + data + BSS + FreeRTOS heap */
-    SRAM0  (rwx) : ORIGIN = 0x10000000, LENGTH = 128K
+    /* Cortex-M4 local SRAM0: stack + data + BSS
+     * LPC4320 has 96 KB local SRAM at 0x10000000 (NOT 128 KB — that is LPC4330+).
+     * Confirmed by Mayhem firmware linker script: len = 96k. */
+    SRAM0  (rwx) : ORIGIN = 0x10000000, LENGTH = 96K
 
-    /* AHB SRAM bank (upper 16 KB): use for FreeRTOS heap and large static arrays.
-     * Lower 16 KB (0x20000000–0x20003FFF) is reserved for M0 DMA ping-pong
-     * buffers (ETB_SRAM in m0.ld). */
-    AHBRAM (rwx) : ORIGIN = 0x20004000, LENGTH = 16K
+    /* AHB SRAM banks 1+2: 0x20004000–0x2000BFFF = 32 KB.
+     * Bank 0 (0x20000000–0x20003FFF, 16 KB) is reserved for M0 DMA ping-pong
+     * buffers (ETB_SRAM in m0.ld).
+     * Used for FreeRTOS heap, task stacks, and DMA-friendly buffers. */
+    AHBRAM (rwx) : ORIGIN = 0x20004000, LENGTH = 32K
 
     /* M0 SRAM — reserved; M4 startup copies baseband binary here */
     /* Not listed as allocatable; the startup routine writes it raw. */

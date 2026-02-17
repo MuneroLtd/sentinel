@@ -52,7 +52,8 @@ private:
 
     // --- Waterfall ring buffer ---
     // 96 rows deep, 320 bins wide (nearest-neighbour from 256 bins)
-    static constexpr int WF_ROWS  = 96;
+    // Ring buffer depth: limited to save SRAM0 (LPC4320 only has 96 KB).
+    static constexpr int WF_ROWS  = 24;
     static constexpr int WF_COLS  = 320;
     int8_t  wf_buf_[WF_ROWS][WF_COLS]{};
     int     wf_head_{0};        // next row to overwrite

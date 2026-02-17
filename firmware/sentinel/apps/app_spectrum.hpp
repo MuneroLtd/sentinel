@@ -35,7 +35,9 @@ private:
     static constexpr int CTRL_Y    = 208;
     static constexpr int CTRL_H    = 32;
     static constexpr int SCREEN_W  = 320;
-    static constexpr int WF_ROWS   = WF_H;  // one row per pixel line
+    // Ring buffer depth: limited to save SRAM0 (LPC4320 only has 96 KB).
+    // Display scrolls/wraps within this depth; older rows are recycled.
+    static constexpr int WF_ROWS   = 40;
 
     // Waterfall ring buffer
     int8_t   wf_buf_[WF_ROWS][SCREEN_W]{};
